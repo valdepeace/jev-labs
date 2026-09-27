@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "classify": "tsx --env-file=.env scripts/run-benchmark.ts",
+    "classify:tiers": "tsx --env-file=.env scripts/run-benchmark.ts --pool tiers",
     "classify:laya": "tsx scripts/run-laya-benchmark.ts",
+    "classify:laya:tiers": "tsx scripts/run-laya-benchmark.ts --pool tiers",
     "prepare": "tsx scripts/prepare-wildchat.ts",
     "analyze": "tsx scripts/analyze-results.ts",
     "report": "tsx scripts/report.ts",

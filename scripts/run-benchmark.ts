@@ -4,6 +4,8 @@ import { pathToFileURL } from "node:url";
 import { OpenRouter } from "@openrouter/sdk";
 import { classifyQuestion, type ClassificationResult } from "../src/classify.js";
 import { loadQuestions, type Question } from "../src/dataset.js";
+import { MODEL_POOL } from "../src/models.js";
+import { flattenTierPool } from "../src/provider-tiers.js";
 
 type BenchmarkRow = ClassificationResult & {
   source: string;
@@ -54,7 +56,7 @@ export async function runBenchmark({
   return summary;
 }
 
-export function parseArgs(args: readonly string[]): { inputPath: string; outputPath: string; limit: number } {
+export function parseArgs(args: readonly string[]): { inputPath: string; outputPath: string; limit: number; pool: "wide" | "tiers" } {
   const option = (flag: string, fallback: string): string => {
     const index = args.indexOf(flag);
     if (index === -1) return fallback;
@@ -64,26 +66,30 @@ export function parseArgs(args: readonly string[]): { inputPath: string; outputP
   };
   const limit = Number(option("--limit", "30"));
   if (!Number.isInteger(limit) || limit < 1) throw new Error("--limit must be a positive integer");
+  const pool = option("--pool", "wide");
+  if (pool !== "wide" && pool !== "tiers") throw new Error("--pool must be 'wide' or 'tiers'");
   return {
     inputPath: option("--input", "data/questions.jsonl"),
     outputPath: option("--output", `results/benchmark-${new Date().toISOString().replaceAll(":", "-")}.jsonl`),
     limit,
+    pool,
   };
 }
 
 async function main(): Promise<void> {
+  const { inputPath, outputPath, limit, pool } = parseArgs(process.argv.slice(2));
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("OPENROUTER_API_KEY is required");
 
-  const { inputPath, outputPath, limit } = parseArgs(process.argv.slice(2));
   const client = new OpenRouter({ apiKey });
+  const modelPool = pool === "tiers" ? flattenTierPool() : MODEL_POOL;
   const summary = await runBenchmark({
     questions: loadQuestions(inputPath),
     limit,
     outputPath,
-    classify: (question) => classifyQuestion(client, question),
+    classify: (question) => classifyQuestion(client, question, modelPool),
   });
-  console.log(JSON.stringify({ outputPath, ...summary }));
+  console.log(JSON.stringify({ outputPath, pool, ...summary }));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

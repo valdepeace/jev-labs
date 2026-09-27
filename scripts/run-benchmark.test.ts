@@ -18,6 +18,12 @@ test("parseArgs rejects a non-positive or fractional limit", () => {
   assert.throws(() => parseArgs(["--limit", "1.5"]), /positive integer/);
 });
 
+test("parseArgs defaults to the wide pool and rejects an unknown pool name", () => {
+  assert.equal(parseArgs([]).pool, "wide");
+  assert.equal(parseArgs(["--pool", "tiers"]).pool, "tiers");
+  assert.throws(() => parseArgs(["--pool", "bogus"]), /--pool must be 'wide' or 'tiers'/);
+});
+
 test("runBenchmark limits calls and records successful and failed classifications", async () => {
   const directory = await mkdtemp(join(tmpdir(), "jev-benchmark-"));
   const outputPath = join(directory, "results.jsonl");
