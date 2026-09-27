@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+data/*.jsonl
+data/raw/
+results/
+.codebase-memory/
+.serena/

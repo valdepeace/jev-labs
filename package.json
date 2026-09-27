@@ -1,0 +1,22 @@
+{
+  "name": "poc-jev-agent-coder",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "classify": "tsx --env-file=.env scripts/run-benchmark.ts",
+    "classify:laya": "tsx scripts/run-laya-benchmark.ts",
+    "prepare": "tsx scripts/prepare-wildchat.ts",
+    "analyze": "tsx scripts/analyze-results.ts",
+    "report": "tsx scripts/report.ts",
+    "test": "tsx --test scripts/*.test.ts"
+  },
+  "dependencies": {
+    "@openrouter/sdk": "^1.3.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
