@@ -13,13 +13,42 @@ function table(title: string, rows: readonly Row[]): string {
   return `<section><h2>${esc(title)}</h2><table><thead><tr><th>Modelo elegido</th><th>Casos</th></tr></thead><tbody>${[...counts].sort().map(([model, count]) => `<tr><td>${esc(model)}</td><td>${count}</td></tr>`).join("")}</tbody></table></section>`;
 }
 
+const JEV_COLOR = "#6366f1";
+const LAYA_COLOR = "#f59e0b";
+
+function countByModel(rows: readonly Row[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const row of rows) if (!row.error && row.modelChoice) counts.set(row.modelChoice, (counts.get(row.modelChoice) ?? 0) + 1);
+  return counts;
+}
+
+export function modelChart(jev: readonly Row[], laya: readonly Row[]): string {
+  const jevCounts = countByModel(jev);
+  const layaCounts = countByModel(laya);
+  const models = [...new Set([...jevCounts.keys(), ...layaCounts.keys()])].sort();
+  const max = Math.max(1, ...models.map((model) => Math.max(jevCounts.get(model) ?? 0, layaCounts.get(model) ?? 0)));
+  const rowHeight = 32;
+  const barMaxWidth = 240;
+  const labelWidth = 190;
+  const height = models.length * rowHeight + 30;
+  const bar = (count: number, y: number, color: string) =>
+    count === 0 ? "" : `<rect x="${labelWidth}" y="${y}" width="${(count / max) * barMaxWidth}" height="11" fill="${color}"/><text x="${labelWidth + (count / max) * barMaxWidth + 5}" y="${y + 10}" font-size="10">${count}</text>`;
+  const rows = models
+    .map((model, index) => {
+      const y = 24 + index * rowHeight;
+      return `<text x="0" y="${y + 9}" font-size="10">${esc(model)}</text>${bar(jevCounts.get(model) ?? 0, y, JEV_COLOR)}${bar(layaCounts.get(model) ?? 0, y + 13, LAYA_COLOR)}`;
+    })
+    .join("");
+  return `<svg viewBox="0 0 460 ${height}" role="img" aria-label="Modelo elegido: Jev vs Laya"><rect x="${labelWidth}" y="2" width="10" height="10" fill="${JEV_COLOR}"/><text x="${labelWidth + 14}" y="11" font-size="10">Jev</text><rect x="${labelWidth + 60}" y="2" width="10" height="10" fill="${LAYA_COLOR}"/><text x="${labelWidth + 74}" y="11" font-size="10">Laya</text>${rows}</svg>`;
+}
+
 export function renderReport(jev: readonly Row[], laya: readonly Row[]): string {
   const layaById = new Map(laya.map((row) => [row.questionId, row]));
   const pairs = jev.map((row) => [row, layaById.get(row.questionId)] as const).filter((pair): pair is [Row, Row] => pair[1] !== undefined);
   const modelAgreement = pairs.filter(([left, right]) => left.modelChoice === right.modelChoice).length;
   const reasoningAgreement = pairs.filter(([left, right]) => left.reasoningEffort === right.reasoningEffort).length;
   const card = (label: string, value: string | number) => `<article><small>${esc(label)}</small><strong>${esc(value)}</strong></article>`;
-  return `<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Jev vs Laya</title><style>body{font:16px system-ui;margin:2rem auto;max-width:1000px;color:#172033}h1{margin-bottom:.2rem}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1rem;margin:1.5rem 0}article,section{border:1px solid #d8dee9;border-radius:8px;padding:1rem;background:#fff}strong{display:block;font-size:1.5rem}small{color:#596275}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:.5rem;border-bottom:1px solid #e5e9f0}body{background:#f7f9fc}@media print{body{margin:1cm;background:#fff}}</style><h1>Informe: Jev vs Laya local</h1><p>Misma muestra WildChat; Laya usa <code>typed-decisions</code> en localhost.</p><div class="grid">${card("Prompts Jev", jev.length)}${card("Prompts Laya", laya.length)}${card("Pares comparables", pairs.length)}${card("Coincidencia modelo", `${modelAgreement}/${pairs.length}`)}${card("Coincidencia esfuerzo", `${reasoningAgreement}/${pairs.length}`)}${card("Latencia media Jev", `${mean(jev).toFixed(0)} ms`)}${card("Latencia media Laya", `${mean(laya).toFixed(0)} ms`)}</div>${table("Distribución Jev", jev)}${table("Distribución Laya", laya)}</html>`;
+  return `<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Jev vs Laya</title><style>body{font:16px system-ui;margin:2rem auto;max-width:1000px;color:#172033}h1{margin-bottom:.2rem}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1rem;margin:1.5rem 0}article,section{border:1px solid #d8dee9;border-radius:8px;padding:1rem;background:#fff}strong{display:block;font-size:1.5rem}small{color:#596275}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:.5rem;border-bottom:1px solid #e5e9f0}body{background:#f7f9fc}@media print{body{margin:1cm;background:#fff}}</style><h1>Informe: Jev vs Laya local</h1><p>Misma muestra WildChat; Laya usa <code>typed-decisions</code> en localhost.</p><div class="grid">${card("Prompts Jev", jev.length)}${card("Prompts Laya", laya.length)}${card("Pares comparables", pairs.length)}${card("Coincidencia modelo", `${modelAgreement}/${pairs.length}`)}${card("Coincidencia esfuerzo", `${reasoningAgreement}/${pairs.length}`)}${card("Latencia media Jev", `${mean(jev).toFixed(0)} ms`)}${card("Latencia media Laya", `${mean(laya).toFixed(0)} ms`)}</div><section><h2>Modelo elegido por pregunta</h2>${modelChart(jev, laya)}</section>${table("Distribución Jev", jev)}${table("Distribución Laya", laya)}</html>`;
 }
 
 async function main(): Promise<void> {
