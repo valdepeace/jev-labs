@@ -4,7 +4,7 @@ import type { Question } from "./dataset.js";
 
 const REASONING_LEVELS = ["low", "medium", "high"];
 
-export async function classifyWithLaya(question: Question, endpoint = process.env.LAYA_URL ?? "http://127.0.0.1:8021/v1/systemone"): Promise<ClassificationResult> {
+export async function classifyWithLaya(question: Question, endpoint = process.env.LAYA_URL ?? "http://127.0.0.1:8021/v1/systemone", modelPool: Record<string, string> = MODEL_POOL): Promise<ClassificationResult> {
   const start = performance.now();
   try {
     const response = await fetch(endpoint, {
@@ -15,7 +15,7 @@ export async function classifyWithLaya(question: Question, endpoint = process.en
         state: question.text,
         questions: {
           reasoning_effort: { type: "score", instructions: "How much reasoning effort does this request need?", criteria: REASONING_LEVELS },
-          model_choice: { type: "choice", instructions: "Which model should handle this request?", criteria: MODEL_POOL },
+          model_choice: { type: "choice", instructions: "Which model should handle this request?", criteria: modelPool },
         },
       }),
     });

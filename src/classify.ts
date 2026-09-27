@@ -30,6 +30,7 @@ export interface ClassificationResult {
 export async function classifyQuestion(
   client: OpenRouter,
   question: Question,
+  modelPool: Record<string, string> = MODEL_POOL,
 ): Promise<ClassificationResult> {
   const start = performance.now();
   try {
@@ -46,7 +47,7 @@ export async function classifyQuestion(
           model_choice: {
             type: "choice",
             instructions: "Which model should handle this request?",
-            criteria: MODEL_POOL,
+            criteria: modelPool,
           },
         },
       },
