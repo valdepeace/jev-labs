@@ -382,10 +382,10 @@ export function parseArgs(args: readonly string[]): { inputPath: string; outputP
 }
 
 async function main(): Promise<void> {
+  const { inputPath, outputPath, limit, pool } = parseArgs(process.argv.slice(2));
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("OPENROUTER_API_KEY is required");
 
-  const { inputPath, outputPath, limit, pool } = parseArgs(process.argv.slice(2));
   const client = new OpenRouter({ apiKey });
   const modelPool = pool === "tiers" ? flattenTierPool() : MODEL_POOL;
   const summary = await runBenchmark({
@@ -398,7 +398,7 @@ async function main(): Promise<void> {
 }
 ```
 
-(`runBenchmark` itself, its `BenchmarkRow`/`BenchmarkSummary` types, and the rest of the file are unchanged.)
+(`runBenchmark` itself, its `BenchmarkRow`/`BenchmarkSummary` types, and the rest of the file are unchanged. Note the reordering versus the current file: arguments are parsed — and therefore `--pool`/`--limit` validated — *before* the `OPENROUTER_API_KEY` check, so a bad flag fails fast without needing a key, and so Step 6's smoke test actually exercises argument parsing.)
 
 - [ ] **Step 4: Mirror the flag in `run-laya-benchmark.ts`**
 
@@ -447,7 +447,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
 In `package.json`, next to the existing `"classify"` and `"classify:laya"` entries, add:
 
 ```json
-"classify:tiers": "tsx --env-file=.env scripts/run-benchmark.ts -- --pool tiers",
+"classify:tiers": "tsx --env-file=.env scripts/run-benchmark.ts --pool tiers",
 "classify:laya:tiers": "tsx scripts/run-laya-benchmark.ts --pool tiers",
 ```
 
