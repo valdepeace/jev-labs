@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { rm } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
 
@@ -51,6 +51,24 @@ test("buildSite writes the hub, styles and one directory per POC", async () => {
     for (const poc of POCS) {
       for (const page of poc.pages ?? []) assert.ok(written.some((path) => path.endsWith(join(poc.slug, page.file))), `${poc.slug}/${page.file} missing`);
       for (const asset of poc.assets ?? []) assert.ok(written.some((path) => path.endsWith(join(poc.slug, asset.file))), `${poc.slug}/${asset.file} missing`);
+    }
+  } finally {
+    await rm(outDir, { recursive: true, force: true });
+  }
+});
+
+test("comparison pages embed the POC question sample and the attribution", async () => {
+  const outDir = "dist/site-test";
+  try {
+    await buildSite(outDir);
+    for (const poc of POCS.filter(({ questions }) => questions)) {
+      for (const page of poc.pages ?? []) {
+        if (!page.comparison) continue;
+        const html = await readFile(join(outDir, poc.slug, page.file), "utf8");
+        const embedded = JSON.parse(html.match(/id="question-data">(.*?)<\/script>/s)![1]) as unknown[];
+        assert.ok(embedded.length > 0, `${poc.slug}/${page.file} embeds no questions`);
+        assert.match(html, /ODC Attribution License/);
+      }
     }
   } finally {
     await rm(outDir, { recursive: true, force: true });

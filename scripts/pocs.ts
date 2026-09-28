@@ -23,6 +23,8 @@ export interface PocSite {
   question: string;
   date: string;
   summary: string;
+  /** Muestra de preguntas (JSONL) que los informes incrustan, si aplica. */
+  questions?: string;
   assets?: readonly SiteAsset[];
   pages?: readonly SitePage[];
 }
@@ -37,6 +39,7 @@ export const POCS: readonly PocSite[] = [
     question: "¿Cómo difieren los tres motores de decisión ante las mismas preguntas de programación?",
     date: "2026-09-27",
     summary: "300 prompts de programación de WildChat-1M, tres motores de decisión tipada y dos pools de modelos.",
+    questions: `${JEV_KEV_LAYA}/questions.jsonl`,
     pages: [
       {
         file: "report.html",

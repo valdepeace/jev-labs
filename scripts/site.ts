@@ -1,15 +1,11 @@
 /**
  * Genera `dist/site/` a partir de las fuentes de `site/` y de los JSONL
  * versionados en `pocs/<slug>/results/`. Nada de lo generado se commitea.
- *
- * Los informes se renderizan **sin** la muestra de preguntas: el dataset no se
- * publica, así que las páginas no embeben textos de prompts y el build
- * funciona en un clon limpio sin `data/questions.jsonl`.
  */
 import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { buildComparisonHtml, buildRouterHtml } from "./report.js";
+import { buildComparisonHtml, buildRouterHtml, loadSampleQuestions } from "./report.js";
 import { POCS, assetPath, type PocSite, type SitePage } from "./pocs.js";
 
 export const SITE_OUT_DIR = "dist/site";
@@ -66,10 +62,11 @@ export async function buildSite(outDir = SITE_OUT_DIR): Promise<string[]> {
       written.push(target);
     }
     for (const page of poc.pages ?? []) {
+      const questions = poc.questions ? await loadSampleQuestions(poc.questions) : [];
       const html = page.router
         ? await buildRouterHtml(page.router)
         : page.comparison
-          ? await buildComparisonHtml(page.comparison.jev, page.comparison.laya, page.comparison.candidates ?? [], [])
+          ? await buildComparisonHtml(page.comparison.jev, page.comparison.laya, page.comparison.candidates ?? [], questions)
           : undefined;
       if (html === undefined) throw new Error(`${poc.slug}/${page.file} has neither comparison nor router inputs`);
       written.push(await writePage(outDir, poc.slug, page.file, html));

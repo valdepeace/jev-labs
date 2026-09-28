@@ -26,8 +26,8 @@ nunca lo metas como paso automático de una tarea más larga.
 src/       contrato y clientes compartidos (Jev, Laya, pool, dataset)
 scripts/   runners, análisis, informe, registro de POCs, generador del sitio
 site/      fuentes a mano del sitio: index.html (hub) y style.css
-pocs/<slug>/   README.md, WHY.md, plans/, analysis/, results/
-data/      contrato del JSONL (los datos NO se publican)
+pocs/<slug>/   README.md, WHY.md, plans/, analysis/, results/, questions.jsonl
+data/      contrato del JSONL de trabajo; el fichero real no se publica
 results/   scratch de los runners; ignorado por git
 dist/site/ sitio generado; ignorado por git
 docs/      solo documentación transversal
@@ -38,17 +38,21 @@ docs/      solo documentación transversal
 - `pocs/<slug>/results/` **se versiona**: es la fuente del sitio. `/results/` de
   la raíz es scratch e ignorado. El slug es kebab-case y estable: define la URL
   de la POC en el sitio.
+- `pocs/<slug>/questions.jsonl` es la muestra de prompts que el informe incrusta,
+  y también se versiona (con atribución ODC-BY). Si una POC no publica prompts,
+  basta con omitir `questions` en su entrada del registro.
 
 ## Cómo añadir una POC
 
 1. `pocs/<slug>/` con `README.md` (pregunta, alcance, fuentes) y `WHY.md`
    (motivos, hipótesis, no-objetivos).
 2. `plans/` con las notas de diseño y `analysis/` con los análisis fechados.
-3. `results/` con los JSONL y CSV de las corridas publicadas.
+3. `results/` con los JSONL y CSV de las corridas publicadas y, si el informe
+   publica los prompts, `questions.jsonl` con la muestra.
 4. Una fila en `pocs/README.md`.
 5. Una entrada en `POCS` de `scripts/pocs.ts` (slug, título, pregunta, fecha,
-   resumen, `pages`/`assets`). `npm run site` construye el hub y las páginas
-   desde ahí: es la única lista que hay que tocar.
+   resumen, `questions`, `pages`/`assets`). `npm run site` construye el hub y las
+   páginas desde ahí: es la única lista que hay que tocar.
 6. `npm test` y `npm run audit` en verde.
 
 ## Reglas no negociables
@@ -56,9 +60,12 @@ docs/      solo documentación transversal
 - **Ningún `.env` se commitea, nunca, ni con `-f`.** Están en `.gitignore`
   (`**/.env`). Antes de cada commit:
   `git status --porcelain --ignored` y `git check-ignore -v .env pocs/*/.env`.
-- **Nada de `git add -A` a ciegas.** `data/*.jsonl` (el dataset de WildChat) y
-  `results/` de la raíz no se publican jamás. El sitio enlaza a
-  `allenai/WildChat-1M` y documenta `npm run prepare` para reproducir la muestra.
+- **Nada de `git add -A` a ciegas.** `data/*.jsonl` y `results/` de la raíz son
+  scratch y no se publican. Lo que sí se publica, por decisión de cada POC, es su
+  muestra de preguntas en `pocs/<slug>/questions.jsonl` (300 prompts de
+  WildChat-1M) junto a los artefactos de `pocs/<slug>/results/`. La muestra
+  completa de WildChat-1M no se incluye: se regenera con `npm run prepare`.
+  `PROMPT*.md` está ignorado porque es material de handoff, no documentación.
 - **Antes de publicar o de hacer push**, los tres chequeos:
 
   ```bash
@@ -94,9 +101,10 @@ docs/      solo documentación transversal
   `--out-dir` (o `RESULTS_DIR`), con `results/` como default. Añadir un runner
   nuevo significa usar `resolveOutDir` de `scripts/paths.ts`.
 - `report.ts` exporta `buildComparisonHtml`/`buildRouterHtml`; `site.ts` los
-  reutiliza. El sitio renderiza **sin** la muestra de preguntas (`questions = []`)
-  para no publicar el dataset y para que el build funcione en un clon limpio sin
-  `data/questions.jsonl` (por eso `loadSampleQuestions` tolera `ENOENT`).
+  reutiliza. Los informes incrustan la muestra de la POC
+  (`poc.questions` → `pocs/<slug>/questions.jsonl`), así que las páginas pesan
+  ~1,2 MB; si el fichero no existe, el informe se genera sin el selector en
+  lugar de fallar (`loadSampleQuestions` tolera `ENOENT`).
 - `scripts/pocs.ts` es el registro del sitio: añadir una POC sin tocarlo no la
   publica.
 - `MODEL_POOL` (`src/models.ts`) se refresca contra el catálogo de OpenRouter. Si

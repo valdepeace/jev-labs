@@ -29,6 +29,8 @@ El preparador local [`scripts/prepare-wildchat.ts`](../../scripts/prepare-wildch
 
 El JSONL de trabajo contiene texto de prompts, ID y tags, pero no país, IP hash, cabeceras ni el resto de metadata de WildChat. [WildChat paper](https://arxiv.org/abs/2405.01470) es la referencia académica del origen de los logs.
 
+La muestra publicada de esta POC está en [`questions.jsonl`](./questions.jsonl) (300 preguntas) y es la que los informes del sitio incrustan. El resto de WildChat-1M no se incluye. Atribución obligatoria: *Contains information from WildChat-1M (allenai/WildChat-1M), which is made available under the ODC Attribution License.*
+
 Kaggle solo se estudió como mirror de **LMSYS-Chat-1M**; no fue el dataset seleccionado ni consumido. Véase [Kaggle LMSYS mirror](https://www.kaggle.com/datasets/gmhost/lmsys-chat-1m) y el [dataset LMSYS original](https://huggingface.co/datasets/lmsys/lmsys-chat-1m). La decisión y sus motivos locales están en [research-datasets.md](./research-datasets.md).
 
 ## Evidencia local disponible

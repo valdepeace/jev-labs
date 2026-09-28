@@ -1,7 +1,8 @@
 # data/
 
 Directorio de trabajo para la muestra de preguntas. `.gitignore` excluye
-`*.jsonl` y `raw/`: **el dataset no se publica**.
+`*.jsonl` y `raw/`: el fichero de trabajo no se commitea. La muestra publicada de
+una POC vive en `pocs/<slug>/questions.jsonl`.
 
 ## Formato esperado: `questions.jsonl`
 
@@ -33,3 +34,6 @@ guarda hasta 300 entradas con `source: "wildchat-1m"`.
 
 Contains information from WildChat-1M (allenai/WildChat-1M), which is made
 available under the ODC Attribution License.
+
+La muestra publicada de la POC Jev/Kev/Laya (300 prompts) está en
+`pocs/jev-kev-laya/questions.jsonl`; el resto del dataset no se incluye.
