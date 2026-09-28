@@ -14,7 +14,7 @@ Sitio publicado: **https://valdepeace.github.io/jev-labs/** · Código: [valdepe
 | --- | --- | --- |
 | [Jev, Kev y Laya](./pocs/jev-kev-laya/README.md) | ¿Cómo difieren los tres motores de decisión ante las mismas preguntas de programación? | Corridas locales publicadas; falta análisis conjunto por ID y reintentos de Kev. |
 | [Patrones de diseño](./pocs/design-patterns/README.md) | ¿Cómo integrar un motor de decisión sin darle autoridad de ejecución? | Contrato offline y pruebas de filtros, policy, abstención y afinidad. |
-| [Afinidad de caché](./pocs/cache-affinity/README.md) | ¿Cuánto cuesta cambiar de modelo a mitad de sesión, y a partir de qué diferencia de precio amortiza? | Simulación determinista publicada: 5,16× el coste de una sesión fija, con el acantilado medido. |
+| [Afinidad de caché](./pocs/cache-affinity/README.md) | ¿Cuánto cuesta cambiar de modelo a mitad de sesión, y a partir de qué diferencia de precio amortiza? | Cinco estrategias comparadas: mantener la caché gana dentro de una banda de precios (~3×) y el TTL es el factor que más pesa. |
 
 ## Estructura
 
