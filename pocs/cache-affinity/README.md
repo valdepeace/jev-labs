@@ -9,6 +9,38 @@ mientras los modelos alternativos estén dentro de ~3× de precio; con brechas m
 router que siempre elige el más barato gana en coste aunque destrocé la caché. Y con un
 turno que tarde más que el TTL, la caché se pierde igual: el acantilado medido es **5,72×**.
 
+## ¿Y para un router hecho con Jev?
+
+El lab quiere saber si merece la pena que **Jev** decida qué modelo atiende cada turno. Respuesta
+corta: **Jev sirve para elegir tier y esfuerzo, y sobre todo para decidir cuándo NO cambiar; no
+sirve como selector de modelo por turno sobre un pool ancho.**
+
+| | |
+| --- | ---: |
+| Coste de una decisión de Jev (~600 tokens) | $0,0000252 |
+| Penalización de caché que puede provocar (prefijo 50K) | **$0,0875** |
+| Jev y Kev coinciden en el modelo elegido, mismo prompt y mismo pool | **19,6%** |
+| Coinciden en el esfuerzo | 61,1% |
+| Decisiones de Jev que superan el suelo de confianza de 1/16 | **100%** |
+
+Dos motores tipados que coinciden una de cada cinco veces significa que la elección está dominada
+por el motor, no por el prompt. Y eso es justo el régimen que este estudio mide como perdedor
+claro: selección inestable entre candidatos equivalentes, **3,99×**. Jev no puede resolver el
+problema de caché porque no lo ve: el estado no es observable y su entrada es solo el texto.
+
+La forma efectiva: **Jev propone, la caché dispone.**
+
+```text
+¿hay caché tibia en el modelo actual?
+├─ no → aplicar la decisión de Jev sin restricción (no hay nada que perder)
+└─ sí → ¿el modelo propuesto es ≥3× más barato?
+         ├─ no → no cambiar: es la banda en la que la caché decide
+         └─ sí → cambiar y comprometerse a permanecer ≥3 turnos
+```
+
+El veredicto completo, con los puntos concretos donde encajaría en `crush`, está en
+[analysis/analysis-2026-09-28-jev-router.md](./analysis/analysis-2026-09-28-jev-router.md).
+
 ## Los seis routers
 
 Múltiplo del coste frente al modelo fijo (menos es mejor):
