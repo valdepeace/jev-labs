@@ -6,7 +6,7 @@ routing de modelos. El código reutilizable vive en `src/`, los comandos en
 `scripts/`, cada experimento con su evidencia en `pocs/` y el sitio publicado se
 genera en `dist/site/`.
 
-Sitio publicado: **https://poc-jev-agent-coder.valdepeace.com** · Código: [valdepeace/poc-jev-agent-coder](https://github.com/valdepeace/poc-jev-agent-coder)
+Sitio publicado: **https://valdepeace.github.io/jev-labs/** · Código: [valdepeace/jev-labs](https://github.com/valdepeace/jev-labs)
 
 ## POCs
 
@@ -21,8 +21,9 @@ Sitio publicado: **https://poc-jev-agent-coder.valdepeace.com** · Código: [val
 src/       contrato y clientes compartidos (Jev, Laya, pool y dataset)
 scripts/   preparación, runners, análisis, informe y generación del sitio
 site/      fuentes a mano del sitio (hub y CSS); lo generado va a dist/site/
-pocs/      una carpeta por experimento: README, WHY, plans, analysis y results
-data/      contrato del JSONL de preguntas (los datos no se publican)
+pocs/      una carpeta por experimento: README, WHY, plans, analysis, results
+           y, si publica prompts, questions.jsonl
+data/      contrato del JSONL de preguntas; el fichero de trabajo no se publica
 results/   scratch local de los runners, ignorado por git
 docs/      documentación transversal (mapa de dónde vive cada cosa)
 ```
@@ -37,7 +38,7 @@ npm run classify -- --out-dir pocs/jev-kev-laya/results
 ## Cómo reproducir
 
 ```powershell
-npm ci
+npm ci --ignore-scripts        # `prepare` es un hook: sin --ignore-scripts descarga la muestra
 npm test                      # suite completa (tsx --test)
 npx tsc --noEmit              # typecheck
 npm run prepare               # regenera data/questions.jsonl desde WildChat-1M
@@ -54,9 +55,11 @@ defecto en `results/` (scratch); `--out-dir` o `RESULTS_DIR` lo cambian.
 
 ## Atribución y licencias
 
-Este repositorio republica **resultados** derivados de WildChat-1M, no el
-dataset. La muestra de preguntas (`data/questions.jsonl`) no se publica y se
-regenera con `npm run prepare`:
+Este repositorio publica, junto a los resultados, la **muestra de 300 preguntas**
+usada en la POC Jev/Kev/Laya
+([`pocs/jev-kev-laya/questions.jsonl`](./pocs/jev-kev-laya/questions.jsonl)), que
+procede de WildChat-1M. La muestra completa de WildChat-1M **no** se incluye: se
+regenera con `npm run prepare`.
 
 > Contains information from WildChat-1M
 > ([allenai/WildChat-1M](https://huggingface.co/datasets/allenai/WildChat-1M)),

@@ -209,9 +209,10 @@ export async function parseRows(path: string): Promise<Row[]> {
 }
 
 /**
- * Muestra de preguntas pa el selector del informe. En un clon limpio
- * `data/questions.jsonl` no existe (no se publica el dataset), así que la
- * ausencia no es un error: el informe se genera sin el selector.
+ * Muestra de preguntas para el selector del informe. El sitio pasa el JSONL
+ * publicado por la POC (`pocs/<slug>/questions.jsonl`); el default sigue siendo
+ * el fichero de trabajo de los runners. Si no existe, el informe se genera sin
+ * el selector en lugar de fallar.
  */
 export async function loadSampleQuestions(path = "data/questions.jsonl"): Promise<Question[]> {
   try {
