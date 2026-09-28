@@ -6,7 +6,7 @@ la implementación desde donde se dejó.
 ---
 
 Quiero que implementes una POC en `E:\workspace\personal\poc-jev-agent-coder`
-(ya tiene el scaffolding preparado — lee `README.md` y `docs/research-datasets.md`
+(ya tiene el scaffolding preparado — lee `README.md` y `pocs/jev-kev-laya/research-datasets.md`
 antes de nada).
 
 ## Objetivo
@@ -56,7 +56,7 @@ Esto es continuación directa del trabajo de:
 - `src/dataset.ts` — interfaz `Question { id, text, source, tags? }` y un
   loader stub que lee de `data/questions.jsonl` (formato JSON Lines, una
   pregunta por línea).
-- `docs/research-datasets.md` — candidatos reales ya investigaos (Kaggle +
+- `pocs/jev-kev-laya/research-datasets.md` — candidatos reales ya investigaos (Kaggle +
   HuggingFace) pa la base de datos de preguntas. **Falta**: descargar el
   dataset elegido, filtrarlo a preguntas de programación, y volcarlo a
   `data/questions.jsonl`.
@@ -64,7 +64,7 @@ Esto es continuación directa del trabajo de:
 ## Lo que falta hacer
 
 1. **Conseguir el dataset.** Empieza por los candidatos de
-   `docs/research-datasets.md` (LMSYS-Chat-1M tiene mirror en Kaggle;
+   `pocs/jev-kev-laya/research-datasets.md` (LMSYS-Chat-1M tiene mirror en Kaggle;
    WildChat-1M está en HuggingFace). Si ninguno convence, sigue buscando en
    Kaggle/GitHub/HuggingFace — el criterio es: preguntas REALES hechas por
    humanos a un asistente de IA (no exámenes ni katas), en contexto de

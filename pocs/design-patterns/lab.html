@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Laboratorio de patrones de decisión</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0b1020; --panel:#151c33; --line:#2b385d; --ink:#eef3ff; --muted:#aab8da; --accent:#7dd3fc; --good:#86efac; --warn:#fcd34d; }
+    * { box-sizing:border-box } body { margin:0; font:16px/1.5 system-ui,sans-serif; background:radial-gradient(circle at top,#172554,var(--bg) 46rem); color:var(--ink) } main { max-width:1180px; margin:auto; padding:3rem 1.25rem 5rem } h1 { font-size:clamp(2.2rem,6vw,4.5rem); line-height:1; margin:.4rem 0 1rem } h2 { margin-top:0 } .eyebrow, small, .hint { color:var(--muted) } .hero { max-width:760px } .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:1rem; margin:2rem 0 } section, .panel { background:color-mix(in srgb,var(--panel) 92%,transparent); border:1px solid var(--line); border-radius:18px; padding:1.25rem } label { display:block; margin:.75rem 0 } select, input, textarea { width:100%; accent-color:var(--accent) } textarea, select { padding:.55rem; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--ink); font:inherit } button { font:inherit } .check { display:flex; gap:.6rem; align-items:center } .check input { width:auto } output { color:var(--accent); float:right } pre { white-space:pre-wrap; overflow:auto; min-height:13rem; color:var(--good); background:#080c18; padding:1rem; border-radius:12px } .pattern { text-align:left; border:1px solid var(--line); border-radius:10px; padding:.7rem; color:var(--ink); background:transparent; cursor:pointer; width:100% } .pattern:hover,.pattern.selected { border-color:var(--accent); background:#172554 } .pattern small { display:block; font-size:.7rem } #pattern-detail strong,#pattern-detail span { display:block } #pattern-detail strong { color:var(--accent); font-size:1.25rem } #pattern-detail span { color:var(--warn) } #flow-boxes { height:540px; border:1px solid var(--line); border-radius:14px; background:#080c18 } #pattern-map { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:.75rem } .pattern-group { border:1px solid var(--line); border-radius:12px; padding:.8rem; background:#0d1427 } .pattern-group.active { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) } .pattern-group h3 { font-size:.9rem; margin:0 0 .7rem; color:var(--accent) } .pattern-group .pattern + .pattern { margin-top:.45rem } a { color:var(--accent) } footer { margin-top:2rem; color:var(--muted) }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="hero">
+      <p class="eyebrow">POC offline · sin credenciales · decisiones reproducibles</p>
+      <h1>Laboratorio de patrones de decisión</h1>
+      <p>Modifica el escenario y observa cómo los filtros, la policy y la afinidad de sesión cambian el receipt. Es una simulación local: no llama a Jev ni ejecuta proveedores.</p>
+    </header>
+    <div class="grid">
+      <section>
+        <h2>Probar una ruta</h2>
+        <form id="controls">
+          <label>Escenario<select name="scenario"><option value="simple">Consulta simple</option><option value="coding" selected>Refactor con tools</option><option value="ambiguous">Petición ambigua</option><option value="external">Razonamiento profundo</option></select></label>
+          <label>Confianza mínima <output id="confidence-value"></output><input name="confidence" type="range" min="0" max="1" step=".05" value=".70"></label>
+          <label>Margen mínimo <output id="margin-value"></output><input name="margin" type="range" min="0" max=".8" step=".05" value=".10"></label>
+          <label class="check"><input name="external" type="checkbox"> Permitir proveedor externo</label>
+          <label class="check"><input name="session" type="checkbox"> Simular binding de sesión existente</label>
+        </form>
+      </section>
+      <section>
+        <h2>Decision receipt</h2>
+        <pre id="receipt" aria-live="polite"></pre>
+      </section>
+    </div>
+    <section>
+      <h2>Una ejecución, paso a paso</h2>
+      <p class="hint"><b>1.</b> Escribes una tarea. <b>2–3.</b> Código normal aplica reglas y filtros. <b>4.</b> Jev devuelve un tier. <b>5–9.</b> Nuestro sistema valida, propone modelo, conserva sesión y deja evidencia. Jev no ejecuta nada.</p>
+      <div id="flow-boxes" aria-label="Grafo del flujo de decisión"></div>
+      <div id="flow-detail" class="panel" style="margin-top:1rem"><strong>Cómo leerlo</strong><p>Pasa el cursor por un nodo para ver su detalle. Pulsa un patrón abajo para resaltar el paso que controla.</p></div>
+    </section>
+    <section>
+      <h2>Simular una tarea con Jev real</h2>
+      <p class="hint">El recorrido animará los pasos. Cuando alcance 4 · Jev decide, hará una llamada real. La clave permanece en `.env`; la llamada puede consumir crédito.</p>
+      <label>Patrón a cargar<select id="pattern-select"></select></label>
+      <label>Estado para decidir<textarea id="live-task" rows="3">Refactor this TypeScript module, run tests, and preserve its public API.</textarea></label>
+      <button id="live-run" type="button">Ejecutar recorrido hasta Jev</button>
+      <p id="live-status" class="hint" aria-live="polite"></p>
+      <pre id="live-receipt">Aún no hay llamada real.</pre>
+    </section>
+    <section>
+      <h2>Patrones aplicados en cada paso</h2>
+      <p class="hint">Esta es la relación: cada columna tiene el mismo número y nombre que un nodo del grafo. Cada patrón se coloca bajo su paso principal; selecciónalo y se ilumina su nodo. En producción algunos cruzan varios pasos, aquí se enseña su responsabilidad principal.</p>
+      <div id="pattern-map"></div>
+      <div id="pattern-detail" class="panel" style="margin-top:1rem">Selecciona un patrón.</div>
+    </section>
+    <footer>Para conectar Jev real, añade un endpoint de servidor que custodie la clave y mantén este contrato: decisión → validación/policy → ejecución. Referencia: <a href="https://route.jev.works/">route.jev.works</a>.</footer>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/vis-network@10.1.2/standalone/umd/vis-network.min.js"></script>
+  <script src="./lab.js"></script>
+</body>
+</html>

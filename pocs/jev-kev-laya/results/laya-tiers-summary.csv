@@ -1,0 +1,15 @@
+kind,value,count
+model,anthropic/claude-sonnet-5,5
+model,google/gemini-3.1-pro-preview,45
+model,openai/gpt-6-astra,50
+model_confidence,below_0.5,100
+reasoning_effort,high,1
+reasoning_effort,medium,99
+tag,c-family,3
+tag,debug,31
+tag,design,3
+tag,javascript,5
+tag,python,25
+text_length,long,53
+text_length,medium,25
+text_length,short,22
