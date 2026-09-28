@@ -12,6 +12,7 @@ estático. Este fichero es el contrato de trabajo; `CLAUDE.md` apunta aquí.
 | `npx tsc --noEmit` | Typecheck. `tsconfig.json` solo incluye `src`. |
 | `npm run prepare` | Regenera `data/questions.jsonl` desde WildChat-1M. |
 | `npm run classify` / `:tiers` / `:laya` | Corridas contra Jev (OpenRouter) o Laya local. Escriben en `pocs/jev-kev-laya/results`. |
+| `npm run cache-affinity` | Regenera la simulación de coste de caché de `pocs/cache-affinity/`. Sin red. |
 | `npm run report` | Informe comparativo HTML del pool general. |
 | `npm run site` | Genera el sitio completo en `dist/site/`. |
 | `npm run audit` | Falla si hay una clave en el árbol versionado. **Obligatorio antes de publicar.** |
@@ -101,10 +102,16 @@ docs/      solo documentación transversal
   `--out-dir` (o `RESULTS_DIR`), con `results/` como default. Añadir un runner
   nuevo significa usar `resolveOutDir` de `scripts/paths.ts`.
 - `report.ts` exporta `buildComparisonHtml`/`buildRouterHtml`; `site.ts` los
-  reutiliza. Los informes incrustan la muestra de la POC
-  (`poc.questions` → `pocs/<slug>/questions.jsonl`), así que las páginas pesan
+  reutiliza. Los informes de comparación incrustan la muestra de la POC
+  (`poc.questions` → `pocs/<slug>/questions.jsonl`), así que esas páginas pesan
   ~1,2 MB; si el fichero no existe, el informe se genera sin el selector en
   lugar de fallar (`loadSampleQuestions` tolera `ENOENT`).
+- Una página del sitio puede renderizarse de tres formas: `comparison` (JSONL de
+  Jev/Laya/candidatos), `router` (piloto de Jev Router) o `cacheAffinity` (el
+  artefacto de simulación de esa POC). `site.ts` importa el render de la POC en
+  vez de duplicar la lógica en `scripts/`.
+- `npm test` cubre también `pocs/*/*.test.ts`: una POC con modelo propio puede
+  traer sus tests y se ejecutan solos.
 - `scripts/pocs.ts` es el registro del sitio: añadir una POC sin tocarlo no la
   publica.
 - `MODEL_POOL` (`src/models.ts`) se refresca contra el catálogo de OpenRouter. Si

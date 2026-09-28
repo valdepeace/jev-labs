@@ -14,6 +14,7 @@ Sitio publicado: **https://valdepeace.github.io/jev-labs/** · Código: [valdepe
 | --- | --- | --- |
 | [Jev, Kev y Laya](./pocs/jev-kev-laya/README.md) | ¿Cómo difieren los tres motores de decisión ante las mismas preguntas de programación? | Corridas locales publicadas; falta análisis conjunto por ID y reintentos de Kev. |
 | [Patrones de diseño](./pocs/design-patterns/README.md) | ¿Cómo integrar un motor de decisión sin darle autoridad de ejecución? | Contrato offline y pruebas de filtros, policy, abstención y afinidad. |
+| [Afinidad de caché](./pocs/cache-affinity/README.md) | ¿Cuánto cuesta cambiar de modelo a mitad de sesión, y a partir de qué diferencia de precio amortiza? | Simulación determinista publicada: 5,16× el coste de una sesión fija, con el acantilado medido. |
 
 ## Estructura
 
@@ -44,6 +45,7 @@ npx tsc --noEmit              # typecheck
 npm run prepare               # regenera data/questions.jsonl desde WildChat-1M
 $env:OPENROUTER_API_KEY = "sk-or-..."; npm run classify   # Jev, pool general
 npm run classify:laya         # Laya local, necesita LAYA_URL o el endpoint por defecto
+npm run cache-affinity        # simula el coste de caché del router (sin red)
 npm run report                # informe comparativo en results/report.html
 npm run site                  # sitio completo en dist/site/
 npm run audit                 # falla si hay una clave en el árbol versionado
