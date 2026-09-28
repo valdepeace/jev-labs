@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { modelChart, renderReport } from "./report.js";
+import { modelChart, renderReport, renderRouterReport } from "./report.js";
 
 test("renderReport compares matching question ids and escapes model names", () => {
   const row = { questionId: "one", source: "test", textLength: 1, latencyMs: 4, modelChoice: "a<b", reasoningEffort: "low" };
@@ -22,4 +22,11 @@ test("modelChart draws one bar per classifier for every distinct model chosen", 
 
 test("modelChart does not divide by zero when both inputs are empty", () => {
   assert.doesNotThrow(() => modelChart([], []));
+});
+
+test("renderRouterReport contains no baseline classifier", () => {
+  const html = renderRouterReport([{ questionId: "one", source: "test", textLength: 1, latencyMs: 4, modelChoice: "provider/model", reasoningEffort: "low" }]);
+  assert.match(html, /Jev Router/);
+  assert.match(html, /provider\/model/);
+  assert.doesNotMatch(html, /Jev vs Laya/);
 });

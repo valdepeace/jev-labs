@@ -23,6 +23,7 @@ export interface ClassificationResult {
   reasoningConfidence?: number;
   modelChoice?: string;
   modelConfidence?: number;
+  usage?: { inputTokens: number; outputTokens: number; cost?: number };
   latencyMs: number;
   error?: string;
 }
@@ -31,12 +32,13 @@ export async function classifyQuestion(
   client: OpenRouter,
   question: Question,
   modelPool: Record<string, string> = MODEL_POOL,
+  model = JEV_MODEL,
 ): Promise<ClassificationResult> {
   const start = performance.now();
   try {
     const result = await client.alpha.decisions.create({
       decisionsRequest: {
-        model: JEV_MODEL,
+        model,
         state: question.text,
         questions: {
           reasoning_effort: {
@@ -51,6 +53,10 @@ export async function classifyQuestion(
           },
         },
       },
+    }, {
+      timeoutMs: 60_000,
+      retries: { strategy: "backoff", backoff: { initialInterval: 1_000, maxInterval: 4_000, exponent: 2, maxElapsedTime: 5_000 } },
+      retryCodes: ["503"],
     });
 
     const answers = result.answers as Record<string, any>;
@@ -64,6 +70,7 @@ export async function classifyQuestion(
       reasoningConfidence: answers.reasoning_effort.confidence,
       modelChoice: answers.model_choice.choice,
       modelConfidence: answers.model_choice.confidence,
+      usage: result.usage,
       latencyMs: performance.now() - start,
     };
   } catch (error) {

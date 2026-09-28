@@ -51,7 +51,7 @@ test("runBenchmark limits calls and records successful and failed classification
             },
     });
 
-    assert.deepEqual(summary, { processed: 2, succeeded: 1, failed: 1 });
+    assert.deepEqual(summary, { processed: 2, succeeded: 1, failed: 1, inputTokens: 0, outputTokens: 0, cost: 0 });
     const rows = (await readFile(outputPath, "utf8")).trim().split("\n").map(JSON.parse);
     assert.deepEqual(rows.map((row) => row.questionId), ["one", "two"]);
     assert.equal(rows[1].error, "rate limited");

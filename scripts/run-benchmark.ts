@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { OpenRouter } from "@openrouter/sdk";
@@ -6,6 +6,7 @@ import { classifyQuestion, type ClassificationResult } from "../src/classify.js"
 import { loadQuestions, type Question } from "../src/dataset.js";
 import { MODEL_POOL } from "../src/models.js";
 import { flattenTierPool } from "../src/provider-tiers.js";
+import { outFile, resolveOutDir, runName } from "./paths.js";
 
 type BenchmarkRow = ClassificationResult & {
   source: string;
@@ -19,6 +20,9 @@ export type BenchmarkSummary = {
   processed: number;
   succeeded: number;
   failed: number;
+  inputTokens: number;
+  outputTokens: number;
+  cost: number;
 };
 
 export async function runBenchmark({
@@ -35,20 +39,26 @@ export async function runBenchmark({
   if (!Number.isInteger(limit) || limit < 1) throw new Error("limit must be a positive integer");
 
   const rows: BenchmarkRow[] = [];
+  const resolvedOutput = resolve(outputPath);
+  await mkdir(dirname(resolvedOutput), { recursive: true });
+  await writeFile(resolvedOutput, "");
   for await (const question of questions) {
     if (rows.length === limit) break;
     const result = await classify(question);
-    rows.push({ ...result, source: question.source, tags: question.tags, textLength: question.text.length });
+    const row = { ...result, source: question.source, tags: question.tags, textLength: question.text.length };
+    rows.push(row);
+    await appendFile(resolvedOutput, `${JSON.stringify(row)}\n`);
+    if (rows.length % 25 === 0) console.log(JSON.stringify({ processed: rows.length, limit }));
   }
 
   const summary = {
     processed: rows.length,
     succeeded: rows.filter((row) => !row.error).length,
     failed: rows.filter((row) => row.error).length,
+    inputTokens: rows.reduce((total, row) => total + (row.usage?.inputTokens ?? 0), 0),
+    outputTokens: rows.reduce((total, row) => total + (row.usage?.outputTokens ?? 0), 0),
+    cost: rows.reduce((total, row) => total + (row.usage?.cost ?? 0), 0),
   };
-  const resolvedOutput = resolve(outputPath);
-  await mkdir(dirname(resolvedOutput), { recursive: true });
-  await writeFile(resolvedOutput, `${rows.map((row) => JSON.stringify(row)).join("\n")}\n`);
   await writeFile(
     resolvedOutput.replace(/\.jsonl$/, ".summary.csv"),
     `processed,succeeded,failed\n${summary.processed},${summary.succeeded},${summary.failed}\n`,
@@ -56,7 +66,7 @@ export async function runBenchmark({
   return summary;
 }
 
-export function parseArgs(args: readonly string[]): { inputPath: string; outputPath: string; limit: number; pool: "wide" | "tiers" } {
+export function parseArgs(args: readonly string[]): { inputPath: string; outputPath: string; outDir: string; limit: number; pool: "wide" | "tiers" } {
   const option = (flag: string, fallback: string): string => {
     const index = args.indexOf(flag);
     if (index === -1) return fallback;
@@ -68,9 +78,11 @@ export function parseArgs(args: readonly string[]): { inputPath: string; outputP
   if (!Number.isInteger(limit) || limit < 1) throw new Error("--limit must be a positive integer");
   const pool = option("--pool", "wide");
   if (pool !== "wide" && pool !== "tiers") throw new Error("--pool must be 'wide' or 'tiers'");
+  const outDir = resolveOutDir(args);
   return {
     inputPath: option("--input", "data/questions.jsonl"),
-    outputPath: option("--output", `results/benchmark-${new Date().toISOString().replaceAll(":", "-")}.jsonl`),
+    outputPath: option("--output", outFile(outDir, `${runName("benchmark")}.jsonl`)),
+    outDir,
     limit,
     pool,
   };

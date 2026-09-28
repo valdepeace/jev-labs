@@ -4,13 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "classify": "tsx --env-file=.env scripts/run-benchmark.ts",
-    "classify:tiers": "tsx --env-file=.env scripts/run-benchmark.ts --pool tiers",
-    "classify:laya": "tsx scripts/run-laya-benchmark.ts",
-    "classify:laya:tiers": "tsx scripts/run-laya-benchmark.ts --pool tiers",
+    "classify": "tsx --env-file=.env scripts/run-benchmark.ts --out-dir pocs/jev-kev-laya/results",
+    "classify:tiers": "tsx --env-file=.env scripts/run-benchmark.ts --pool tiers --out-dir pocs/jev-kev-laya/results",
+    "classify:laya": "tsx scripts/run-laya-benchmark.ts --out-dir pocs/jev-kev-laya/results",
+    "classify:laya:tiers": "tsx scripts/run-laya-benchmark.ts --pool tiers --out-dir pocs/jev-kev-laya/results",
     "prepare": "tsx scripts/prepare-wildchat.ts",
     "analyze": "tsx scripts/analyze-results.ts",
-    "report": "tsx scripts/report.ts",
+    "report": "tsx scripts/report.ts pocs/jev-kev-laya/results/benchmark-2026-09-27T14-44-37.993Z.jsonl pocs/jev-kev-laya/results/laya-2026-09-27T14-44-37.980Z.jsonl pocs/jev-kev-laya/results/kev-wide-2026-09-27T16-59-09.765Z.jsonl pocs/jev-kev-laya/results/router-2026-09-27T16-31-17.126Z.jsonl",
+    "site": "tsx scripts/site.ts",
+    "audit": "tsx scripts/audit-secrets.ts",
     "test": "tsx --test scripts/*.test.ts src/*.test.ts"
   },
   "dependencies": {

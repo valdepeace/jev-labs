@@ -3,7 +3,7 @@ import { createInterface } from "node:readline";
 
 /**
  * Una pregunta de programación extraída del dataset elegido (ver
- * docs/research-datasets.md). `source` identifica de qué dataset viene,
+ * pocs/jev-kev-laya/research-datasets.md). `source` identifica de qué dataset viene,
  * pa poder comparar comportamiento de Jev por origen si hace falta.
  */
 export interface Question {
@@ -36,7 +36,7 @@ function parseQuestion(line: string, lineNumber: number, path: string): Question
 /**
  * Lee data/questions.jsonl (una pregunta por línea, JSON). Ese fichero NO
  * existe todavía — hay que generarlo a partir de uno de los datasets de
- * docs/research-datasets.md (ver PROMPT.md, paso 1-2).
+ * pocs/jev-kev-laya/research-datasets.md (ver PROMPT.md, paso 1-2).
  */
 export async function* loadQuestions(path = "data/questions.jsonl"): AsyncGenerator<Question> {
   const input = createReadStream(path, "utf-8");
