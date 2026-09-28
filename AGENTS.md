@@ -83,6 +83,9 @@ docs/      solo documentación transversal
 
 ## Gotchas
 
+- `prepare` es un **hook de ciclo de vida de npm**: `npm install` / `npm ci` lo
+  ejecutan automáticamente y descargan la muestra de WildChat. En CI y en
+  entornos sin red usa `npm ci --ignore-scripts` (es lo que hace el workflow).
 - `NodeNext` (`"type": "module"`): los imports relativos llevan extensión `.js`
   (`./models.js`), también desde `scripts/`.
 - `tsconfig.json` solo incluye `src/`, así que `tsc --noEmit` **no** valida

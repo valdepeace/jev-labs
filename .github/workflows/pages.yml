@@ -23,7 +23,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      # --ignore-scripts: `prepare` es un hook de npm y descargaria la muestra
+      # de WildChat; el sitio se construye desde los JSONL versionados.
+      - run: npm ci --ignore-scripts
       - run: npm run audit
       - run: npm test
       - run: npm run site
