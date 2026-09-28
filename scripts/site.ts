@@ -6,6 +6,8 @@ import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { buildComparisonHtml, buildRouterHtml, loadSampleQuestions } from "./report.js";
+import { renderCacheAffinityReport } from "../pocs/cache-affinity/report.js";
+import type { SimulationArtifact } from "../pocs/cache-affinity/scenarios.js";
 import { POCS, assetPath, type PocSite, type SitePage } from "./pocs.js";
 
 export const SITE_OUT_DIR = "dist/site";
@@ -63,12 +65,14 @@ export async function buildSite(outDir = SITE_OUT_DIR): Promise<string[]> {
     }
     for (const page of poc.pages ?? []) {
       const questions = poc.questions ? await loadSampleQuestions(poc.questions) : [];
-      const html = page.router
-        ? await buildRouterHtml(page.router)
-        : page.comparison
-          ? await buildComparisonHtml(page.comparison.jev, page.comparison.laya, page.comparison.candidates ?? [], questions)
-          : undefined;
-      if (html === undefined) throw new Error(`${poc.slug}/${page.file} has neither comparison nor router inputs`);
+      const html = page.cacheAffinity
+        ? renderCacheAffinityReport(JSON.parse(await readFile(page.cacheAffinity.artifact, "utf8")) as SimulationArtifact)
+        : page.router
+          ? await buildRouterHtml(page.router)
+          : page.comparison
+            ? await buildComparisonHtml(page.comparison.jev, page.comparison.laya, page.comparison.candidates ?? [], questions)
+            : undefined;
+      if (html === undefined) throw new Error(`${poc.slug}/${page.file} has no comparison, router or cacheAffinity inputs`);
       written.push(await writePage(outDir, poc.slug, page.file, html));
     }
   }

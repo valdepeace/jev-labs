@@ -15,6 +15,8 @@ export interface SitePage {
   title: string;
   comparison?: { jev: string; laya: string; candidates?: readonly string[] };
   router?: readonly string[];
+  /** Página de la POC de afinidad de caché: se renderiza desde su artefacto. */
+  cacheAffinity?: { artifact: string };
 }
 
 export interface PocSite {
@@ -31,6 +33,7 @@ export interface PocSite {
 
 const JEV_KEV_LAYA = "pocs/jev-kev-laya";
 const DESIGN_PATTERNS = "pocs/design-patterns";
+const CACHE_AFFINITY = "pocs/cache-affinity";
 
 export const POCS: readonly PocSite[] = [
   {
@@ -81,6 +84,20 @@ export const POCS: readonly PocSite[] = [
     assets: [
       { source: `${DESIGN_PATTERNS}/lab.html`, file: "lab.html" },
       { source: `${DESIGN_PATTERNS}/lab.js`, file: "lab.js" },
+    ],
+  },
+  {
+    slug: "cache-affinity",
+    title: "Afinidad de caché",
+    question: "¿Cuánto cuesta cambiar de modelo a mitad de sesión, y a partir de qué diferencia de precio amortiza?",
+    date: "2026-09-28",
+    summary: "Simulación determinista del coste de caché por turno: acantilado de reescritura, TTL y turnos de amortización.",
+    pages: [
+      {
+        file: "report.html",
+        title: "Coste del router en caliente",
+        cacheAffinity: { artifact: `${CACHE_AFFINITY}/results/simulation.jsonl` },
+      },
     ],
   },
 ];
