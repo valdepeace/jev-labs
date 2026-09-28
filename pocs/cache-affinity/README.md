@@ -9,23 +9,31 @@ mientras los modelos alternativos estén dentro de ~3× de precio; con brechas m
 router que siempre elige el más barato gana en coste aunque destrocé la caché. Y con un
 turno que tarde más que el TTL, la caché se pierde igual: el acantilado medido es **5,72×**.
 
-## Los cinco routers
+## Los seis routers
 
-| # | Estrategia | Mira la caché | Repo grande (100K) | Repo medio (40K) | Con pausas |
-| --- | --- | --- | ---: | ---: | ---: |
-| A | Modelo fijo (cubre el pico) | — | 1,00× | 1,00× | 1,00× |
-| B | El más barato por petición | no | **0,60×** | **0,63×** | **0,46×** |
-| C | Calidad con margen de seguridad | no | 0,94× | 0,97× | 0,95× |
-| D | Consciente de la caché | sí | 1,02× | 1,02× | 0,44× |
-| E | Regla de dos líneas | sí | 1,02× | 1,02× | 0,44× |
+Múltiplo del coste frente al modelo fijo (menos es mejor):
 
-Múltiplo del coste frente al modelo fijo (menos es mejor). **D y E empatan en todos los
-workloads**: una regla de dos líneas —«quédate mientras tu caché esté viva, si no cambia al
-más barato»— captura todo el beneficio de la heurística ponderada. Ese es el resultado más
-incómodo del estudio, y está medido, no supuesto.
+| Estrategia | Mira caché | Repo 10K | Repo 40K | Repo 100K | Tools | Pausas | Cortos |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| A · Modelo fijo (cubre el pico) | — | 1,00× | 1,00× | 1,00× | 1,00× | 1,00× | 1,00× |
+| B · El más barato por petición | no | 1,00× | 0,63× | **0,60×** | 0,93× | **0,46×** | 0,55× |
+| B' · Lo mismo repartiendo carga | no | **3,99×** | 2,04× | 2,05× | 1,81× | 0,83× | 1,12× |
+| C · Calidad con margen | no | 3,00× | 0,97× | 0,94× | 1,16× | 0,95× | 0,94× |
+| D · Consciente de la caché | sí | 1,00× | 1,02× | 1,02× | **0,94×** | **0,44×** | 0,55× |
+| E · Regla de dos líneas | sí | 1,00× | 1,02× | 1,02× | **0,94×** | **0,44×** | 0,94× |
 
-D y E compran otra cosa que el coste: **93% de acierto de caché frente al 90% de B, y 1
-cambio de modelo frente a 21**. En una sesión real eso es latencia y previsibilidad.
+Tres lecturas:
+
+- **El router inestable es el peor de todos.** B' reparte carga entre candidatos
+  equivalentes sin mirar la caché y llega a **3,99×**. No gana nada por token: solo paga
+  reescrituras. Es el único caso con un perdedor claro.
+- **D y E empatan en 5 de 6 workloads**, con los mismos cambios y el mismo acierto. Se separan
+  en «prompts cortos», donde el prefijo está justo en el mínimo cacheable: la regla binaria se
+  vuelve pegajosa en cuanto la caché pasa a ser viable y pierde un **41,9%** frente a la
+  heurística. Está en la tabla de tarjetas del informe, no escondido.
+- **D compra algo que no es coste**: en el repo grande, 95% de acierto y **1** cambio de modelo
+  frente al 93% y **29** cambios de B, a un 2% más de coste. En una sesión real eso es latencia
+  del primer token y previsibilidad.
 
 ## Las condiciones
 
@@ -93,13 +101,13 @@ es claramente más barato, y antes si el proveedor no cobra la escritura:
 | 1 | ¿Cuánto contexto hace falta para que la caché domine? | El mínimo cacheable del proveedor (~1.024 tokens aquí). Por debajo, el cambio de modelo no cuesta nada; por encima, crece con el prefijo. |
 | 2 | ¿Cuánto más barato debe ser el otro modelo? | Con prefijo largo, la mitad de precio amortiza en 8 turnos; un 20% más barato tarda 32. A igual precio, nunca. |
 | 3 | ¿Qué impacto tiene el TTL? | **El mayor de todos.** Es el único factor que lleva la tasa de acierto a cero de golpe. |
-| 4 | ¿Cuánto afecta la frecuencia del usuario? | Entre 60 s y 150 s por turno con TTL de 5 min se pasa del 90% al 0% de acierto. |
+| 4 | ¿Cuánto afecta la frecuencia del usuario? | Entre 60 s y 150 s por turno con TTL de 5 min se pasa del 90% al 0% de acierto. Es el factor con el salto más brusco de todo el estudio. |
 | 5 | ¿Cuándo tiene sentido renovar una caché? | Cuando hacerlo evita una reescritura futura y el turno no cuesta mucho más. Un cache read **ya renueva el TTL gratis**, así que quedarse en un modelo tibio casi siempre lo renueva. |
 | 6 | ¿Varias cachés calientes a la vez? | Sí, y es barato: dos linajes alternos se mantienen tibios a 1,09× mientras las revisitas caigan dentro del TTL. |
-| 7 | ¿Cuánto cuesta el cambio de modelo en una sesión? | Depende del patrón: 8%–110% del coste de una sesión fija en estos workloads; con el TTL agotado, 5,72×. |
+| 7 | ¿Cuánto cuesta el cambio de modelo en una sesión? | Depende del patrón y del router: desde un 33% más barato que quedarse (B en pausas) hasta **3,99×** con reparto de carga. Con el TTL agotado, 5,72×. |
 | 8 | ¿Cuándo gana el modelo fijo? | Cuando los routers alternativos pagan capacidad o caché sin ganar nada: en el repo pequeño, C cuesta 3,00× por sobreaprovisionar calidad. |
 | 9 | ¿Cuándo gana un router dinámico? | Cuando la brecha de precios es grande (>3×): 0,60× en el repo grande. |
-| 10 | ¿Cuándo gana un router consciente de la caché? | Mientras los candidatos estén dentro de ~3× de precio, y siempre que un router inestable esté en juego. |
+| 10 | ¿Cuándo gana un router consciente de la caché? | Mientras los candidatos estén dentro de ~3× de precio entre sí, y siempre que el router alternativo sea inestable: contra el reparto de carga baja de 2,05× a 1,02×. |
 | 11 | ¿Cómo cambia en contextos de 50K–150K? | El múltiplo crece con el prefijo (1,07× a 1,29×) pero **no aparece un acantilado nuevo**: lo que cambia es el coste absoluto de cada reescritura. |
 | 12 | ¿Compensa perder calidad? | **Sin respuesta.** Este lab no tiene etiqueta de verdad de qué modelo debía resolver cada prompt. |
 

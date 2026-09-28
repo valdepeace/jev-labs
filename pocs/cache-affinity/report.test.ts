@@ -25,7 +25,8 @@ test("every workload, sequence and strategy appears in the report", () => {
   const html = renderCacheAffinityReport(artifact);
   for (const comparison of artifact.strategies) {
     assert.ok(html.includes(comparison.workloadName), `${comparison.workloadName} missing`);
-    for (const run of comparison.runs) assert.ok(html.includes(run.policyName), `${run.policyName} missing`);
+    // El informe escapa el apostrofo de «B' · ...», asi que se busca el texto escapado.
+    for (const run of comparison.runs) assert.ok(html.includes(escapeHtml(run.policyName)), `${run.policyName} missing`);
   }
   for (const sequence of artifact.sequences) assert.ok(html.includes(sequence.pattern), `${sequence.pattern} missing`);
 });

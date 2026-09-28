@@ -50,6 +50,7 @@ export interface StrategyComparison {
 
 const POLICIES: readonly { id: string; name: string; make: () => Policy }[] = [
   { id: "cheapest", name: "B · El más barato por petición", make: () => cheapest },
+  { id: "loadBalanced", name: "B' · El más barato con reparto de carga", make: () => loadBalanced },
   { id: "quality", name: "C · Calidad con margen de seguridad", make: () => quality() },
   { id: "cacheAware", name: "D · Router consciente de la caché", make: () => cacheAware() },
   { id: "warmOrSwitch", name: "E · Regla de dos líneas", make: () => warmOrSwitch },

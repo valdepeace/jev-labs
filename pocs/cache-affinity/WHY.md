@@ -56,7 +56,7 @@ exactamente lo que hace un gateway real.
 - **No toca `crush`.** La evidencia son el modelo y el informe, no un parche en el fork.
 - **No implementa RL ni bandits.** El problema es un MDP (la decisión de hoy cambia el estado
   de mañana), pero con un horizonte de un paso y una regla de permanencia se captura casi todo
-  el valor: el estudio lo demuestra midiendo que E empata con D.
+  el valor: el estudio lo demuestra midiendo que E iguala a D en 5 de 6 workloads.
 
 ## Lo que sostiene las conclusiones
 
