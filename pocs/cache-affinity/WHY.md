@@ -4,43 +4,63 @@
 
 El lab compara motores que eligen modelo por pregunta. El router de `crush` lo hace **por
 mensaje de usuario**: `internal/router/decide.go` construye las preguntas en cada mensaje y
-`coordinator.go` aplica el override si la confianza en la elección supera `1/poolSize`.
+`coordinator.go` aplica el override si la confianza supera `1/poolSize` — con un pool de 16
+ese suelo es 0,0625, y en las corridas publicadas de este lab **300 de 300 decisiones lo
+superan**, así que el router cambiaría de modelo en todos los turnos.
 
-Ese diseño choca con una propiedad de los proveedores que no está en el código: **la caché
-de prompt está indexada por modelo**. Al cambiar de modelo, el prefijo cacheado del modelo
-anterior no se puede leer, y el nuevo turno paga el prefijo completo a precio de escritura.
+Ese diseño choca con una propiedad de los proveedores que no está en el código: **la caché de
+prompt está indexada por modelo y por endpoint**. Al cambiar de modelo, el prefijo cacheado no
+se puede leer, y el turno nuevo lo paga entero a precio de escritura.
 
-Los ahorros que el router reporta (`RouterSavings` en `coordinator.go`) comparan el uso real
-contra el modelo más caro del pool, pero **nunca cobran la escritura de caché que provoca el
-cambio**. El número que sale es estructuralmente optimista y, en el peor caso, de signo
-contrario al real.
+Los ahorros que el fork reporta (`RouterSavings`) comparan el uso real contra el modelo más
+caro del pool, pero **nunca cobran la escritura que provoca el cambio**. El número sale
+optimista de forma estructural.
 
-## La hipótesis que se quería poner a prueba
+## La hipótesis, y qué pasó con ella
 
-Que el cambio de modelo en caliente sea caro. Resultó ser más matizado:
+> En agentes con grandes contextos reutilizables, elegir siempre el modelo aparentemente más
+> barato para cada petición puede no ser la estrategia de menor coste total.
 
-- **Confirmado para pools grandes.** Con un pool tan grande como la ventana del TTL, ninguna
-  visita encuentra la entrada fresca y el coste se satura en ~5× sin ninguna lectura de caché.
-- **Refutado para pools pequeños.** Con dos modelos alternos cada uno se revisita dentro del
-  TTL, ambos linajes siguen tibios y el sobrecoste es de 1,48×, no 5×. El enemigo no es
-  cambiar de modelo: es cambiar de modelo hacia un linaje que ya ha caducado.
-- **El caso peor no es el cambio de tier, es el cambio lateral.** Mismo precio y otra entrada
-  de caché (el mismo modelo en otro endpoint, o dos modelos del mismo tier) es pérdida pura:
-  hay reescritura y no hay ahorro que la amortice, nunca.
+**Confirmada en una banda estrecha, refutada fuera de ella.** Con un baseline honesto, el
+router que siempre elige el más barato **gana en coste** en casi todos los workloads
+(0,46×–0,63× frente al modelo fijo), porque el ahorro por token supera la penalización de
+reescribir el prefijo. El router consciente de la caché solo gana mientras los candidatos
+estén dentro de ~3× de precio entre sí (9 de 11 tramos medidos).
+
+Tres hallazgos que no esperaba y que cambiaron el diseño:
+
+1. **El enemigo no es el cambio de modelo, es el TTL.** Un turno que tarda más que la ventana
+   de caché pierde el prefijo igual que un cambio de modelo: la tasa de acierto pasa del 90%
+   al 0% entre 60 s y 150 s por turno. El modelo se tuvo que reescribir para correr en reloj
+   en vez de en turnos.
+2. **La contaminación del prefijo no es una pérdida permanente.** Un diff o una salida de
+   tests por delante del breakpoint tiran todas las entradas, pero el prefijo contaminado se
+   vuelve a cachear: cuesta una reescritura por evento, no un cambio de régimen.
+3. **Una regla de dos líneas iguala a la heurística.** «Quédate mientras tu caché esté viva,
+   si no cambia al más barato» empata con la heurística de horizonte en todos los workloads.
+   Cualquier heurística ponderada con pesos configurables tiene que justificarse contra eso.
+
+Igual de importante: **el problema solo existe si el router es inestable.** Con un mapeo
+determinista de dificultad a modelo, los linajes se revisitan dentro del TTL y las cachés se
+mantienen tibias solas. Lo que destruye la caché es que la elección varíe por razones que no
+son la dificultad — reparto de carga, salud de proveedor, ruido de confianza—, que es
+exactamente lo que hace un gateway real.
 
 ## No-objetivos
 
-- **No mide la caché real del proveedor.** La fija el proveedor; aquí se modela con sus
-  ratios documentados y se declara el TTL como supuesto explícito.
-- **No llama a OpenRouter.** Cero credenciales y cero coste; el informe entra en CI.
-- **No toca `crush`.** La evidencia de esta POC es el modelo y el informe, no un parche en el
-  fork. Lo que se deduce para el fork son condiciones de decisión, no código.
-- **No juzga la calidad del routing.** Mide el suelo de coste que un cambio tiene que superar
-  para pagarse; puede seguir siendo la decisión correcta por otras razones.
+- **No mide la caché real del proveedor.** La impone él; aquí se modela con sus ratios
+  documentados y el TTL como supuesto declarado.
+- **No mide calidad.** No hay etiqueta de verdad de qué modelo debía resolver cada prompt.
+  La calidad entra como restricción asumida (capacidad mínima por turno), nunca como medida.
+- **No llama a OpenRouter.** Cero credenciales, cero coste, entra en CI.
+- **No toca `crush`.** La evidencia son el modelo y el informe, no un parche en el fork.
+- **No implementa RL ni bandits.** El problema es un MDP (la decisión de hoy cambia el estado
+  de mañana), pero con un horizonte de un paso y una regla de permanencia se captura casi todo
+  el valor: el estudio lo demuestra midiendo que E empata con D.
 
-## Lo que sostiene la conclusión
+## Lo que sostiene las conclusiones
 
-Las cifras adimensionales: el múltiplo de coste frente a la sesión fija, los turnos de
-amortización frente al cociente de precios, y el punto exacto de saturación. La columna en
-dólares usa un precio base declarado y editable, solo para dar escala, porque los ratios de
-caché —que son los que documenta el proveedor— son lo que decide el resultado.
+Las cifras adimensionales: múltiplos de coste, tasas de acierto y turnos de amortización. La
+columna en dólares usa un precio base declarado solo para dar escala, porque los ratios de
+caché —escritura 1,25×, lectura 0,1×— son lo que decide el resultado. Todos los supuestos que
+cambiarían la conclusión están en la tabla de método y límites del informe.

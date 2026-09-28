@@ -17,12 +17,13 @@ async function main(): Promise<void> {
   const artifact = buildSimulation();
   await mkdir(dirname(target), { recursive: true });
   await writeFile(target, `${JSON.stringify(artifact)}\n`);
-  const cold = artifact.scenarios.find((scenario) => scenario.id === "pool16");
-  const sticky = artifact.scenarios.find((scenario) => scenario.id === "sticky");
+  const cheap = artifact.strategies.find((comparison) => comparison.workload === "large");
+  const worst = cheap?.runs.reduce((max, run) => (run.multipleOfFixed > max.multipleOfFixed ? run : max), cheap.runs[0]);
   console.log(JSON.stringify({
     outputPath: target,
-    scenarios: artifact.scenarios.length,
-    poolMultiple: cold && sticky ? Number((cold.result.total / sticky.result.total).toFixed(2)) : null,
+    workloads: artifact.strategies.length,
+    sequences: artifact.sequences.length,
+    worstWorstCase: worst ? `${worst.policy} ×${worst.multipleOfFixed.toFixed(2)} on ${worst.workload}` : null,
   }));
 }
 

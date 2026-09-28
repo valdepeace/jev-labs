@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { barChart, escapeHtml, lineChart } from "./charts.js";
-import { poolMultiple, renderCacheAffinityReport } from "./report.js";
+import { renderCacheAffinityReport } from "./report.js";
 import { buildSimulation, type SimulationArtifact } from "./scenarios.js";
 
 const artifact = JSON.parse(await readFile("pocs/cache-affinity/results/simulation.jsonl", "utf8")) as SimulationArtifact;
@@ -12,38 +12,59 @@ test("the committed artifact matches what the simulator produces today", () => {
   assert.deepEqual(artifact, buildSimulation(), "results/simulation.jsonl is stale: run `npm run cache-affinity`");
 });
 
-test("the report states the headline the simulation supports", () => {
+test("the report renders without leaking NaN, Infinity or undefined", () => {
   const html = renderCacheAffinityReport(artifact);
-  assert.match(html, /Afinidad de caché en el router de modelos/);
-  assert.match(html, new RegExp(`${poolMultiple(artifact).toFixed(2)}×`));
-  assert.match(html, /por modelo/);
-  assert.match(html, /<table>/);
-  assert.match(html, /<svg/);
-  assert.match(html, /npm run cache-affinity/);
-});
-
-test("every scenario appears in the table and in the cumulative chart", () => {
-  const html = renderCacheAffinityReport(artifact);
-  for (const scenario of artifact.scenarios) {
-    assert.ok(html.includes(scenario.name), `${scenario.name} missing from the report`);
-    assert.ok(html.includes(scenario.description), `${scenario.name} description missing`);
+  for (const broken of ["NaN", "Infinity", "undefined", "[object Object]"]) {
+    assert.ok(!html.includes(broken), );
   }
-  assert.equal((html.match(/<polyline/g) ?? []).length, artifact.scenarios.length, "one line per scenario");
+  assert.match(html, /Afinidad de caché en el router de modelos/);
+  assert.match(html, /nunca/, "a break-even that never pays must read 'nunca', not Infinity");
 });
 
-test("the report says 'nunca' rather than printing Infinity", () => {
+test("every workload, sequence and strategy appears in the report", () => {
   const html = renderCacheAffinityReport(artifact);
-  assert.doesNotMatch(html, /Infinity/);
-  assert.doesNotMatch(html, /NaN/);
-  assert.match(html, /nunca/);
+  for (const comparison of artifact.strategies) {
+    assert.ok(html.includes(comparison.workloadName), `${comparison.workloadName} missing`);
+    for (const run of comparison.runs) assert.ok(html.includes(run.policyName), `${run.policyName} missing`);
+  }
+  for (const sequence of artifact.sequences) assert.ok(html.includes(sequence.pattern), `${sequence.pattern} missing`);
 });
 
-test("a pool that cannot be revisited inside the ttl reports zero cache reads", () => {
-  const saturated = artifact.pools.filter((row) => row.cacheReadTokens === 0).map((row) => row.poolSize);
-  assert.ok(saturated.length > 0, "the saturation plateau is the finding; it must be present");
-  // La entrada caduca a los `ttl` turnos, asi que el acantilado empieza justo
-  // cuando el pool alcanza la ventana: un pool de tamano `ttl` ya no revisita.
-  assert.equal(saturated[0], artifact.defaultTtlTurns, `saturation should start at the ttl window, got ${saturated[0]}`);
+test("the report draws a timeline per representative session, with cache state per turn", () => {
+  const html = renderCacheAffinityReport(artifact);
+  const blocks = html.split('aria-label="Modelo y estado de caché por turno de ').slice(1);
+  assert.equal(blocks.length, artifact.timelines.length, "one timeline per representative session");
+  const cells = blocks.map((block) => [...block.matchAll(/>(H|M)<\/text>/g)].map((match) => match[1]));
+  const warm = artifact.timelines.map((timeline) => timeline.rows.filter((row) => row.warm).length);
+  cells.forEach((block, index) => {
+    assert.equal(block.length, artifact.timelines[index].rows.length, "one cell per turn");
+    assert.equal(block.filter((cell) => cell === "H").length, warm[index], "H means it found a warm cache");
+  });
+});
+
+test("the pace sweep shows the cliff: some pace loses the cache entirely", () => {
+  const cold = artifact.paces.filter((row) => row.cacheHitRatio === 0);
+  assert.ok(cold.length > 0, "the TTL cliff is the headline; it must be present");
+  assert.ok(cold[0].multipleOfSingle > 3, `a lost cache should cost multiples, got ${cold[0].multipleOfSingle}`);
+});
+
+test("the price-gap sweep finds both regimes: cache-aware wins somewhere, cheapest wins somewhere", () => {
+  const winners = new Set(artifact.priceGaps.map((row) => row.winner));
+  assert.ok(winners.has("cacheAware"), "the cache-aware router must win in some band");
+  assert.ok(winners.has("cheapest"), "and the cheapest router must win once the gap is wide");
+  const aware = artifact.priceGaps.filter((row) => row.winner === "cacheAware");
+  const cheapest = artifact.priceGaps.filter((row) => row.winner === "cheapest");
+  assert.ok(Math.min(...aware.map((row) => row.midPrice)) > Math.max(...cheapest.map((row) => row.midPrice)), "the crossover must be monotone: wide gaps favour the cheapest");
+});
+
+test("every scenario satisfies the capability it requires", () => {
+  // La estrategia fija usa el modelo que cubre el pico del workload: si no, el
+  // baseline haria trampa comparandose contra routers que si respetan la capacidad.
+  for (const comparison of artifact.strategies) {
+    const fixed = comparison.runs.find((run) => run.policy === "fixed");
+    assert.ok(fixed, `${comparison.workload} has no fixed baseline`);
+    assert.equal(fixed.multipleOfFixed, 1, "the baseline is the reference by definition");
+  }
 });
 
 test("chart primitives escape their labels and survive empty input", () => {

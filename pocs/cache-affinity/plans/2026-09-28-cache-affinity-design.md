@@ -1,82 +1,109 @@
 # POC: afinidad de caché en el router de modelos
 
+## Fase 1 (en curso): comparar estrategias de routing
+
 ## Pregunta
 
-**¿Cuánto cuesta cambiar de modelo a mitad de sesión, y a partir de qué diferencia de
-precio amortiza?**
+**¿Cuándo es más barato mantener un modelo por su caché que cambiar a otro más barato por
+token?**
 
-La caché de prompt del proveedor está indexada por modelo. Un router que elige modelo
-en cada turno destruye, en cada cambio, la caché que el turno anterior acabó de pagar.
-Esta POC mide ese sobrecoste y la condición bajo la que el cambio compensa.
+La caché de prompt está indexada por modelo (y por endpoint), no por conversación. Un router
+que elige modelo en cada turno destruye la caché que el turno anterior acabó de pagar.
 
-## Alcance
+## Hipótesis
 
-**Dentro:** un modelo de coste de caché por turno, determinista y sin red; los
-escenarios que ilustran el acantilado; y el informe con tablas y gráficos que se
-publica en el sitio.
+> En agentes de programación con grandes contextos reutilizables, elegir siempre el modelo
+> aparentemente más barato para cada petición puede no ser la estrategia de menor coste
+> total.
 
-**Fuera:** llamadas reales a OpenRouter (enfoque B, validación manual posterior),
-cambios en `E:\workspace\personal\crush`, y cualquier medición de la tasa de acierto
-real del proveedor. Esa tasa la fija el proveedor; aquí se modela.
+**No se acepta por defecto.** Las conclusiones tienen que salir de las condiciones medidas.
+
+## Alcance de la fase 1
+
+**Dentro:** un modelo de coste de caché con TTL en reloj, mínimo cacheable y contaminación
+del prefijo; un ledger de estado explícito; cinco estrategias puras comparadas sobre los
+mismos workloads; y el informe con tablas, timeline de sesión y ciclo de vida de la caché.
+
+**Fuera (fase 2, opcional):** llamadas reales a OpenRouter para validar el modelo. Requiere
+extender la telemetría de `src/classify.ts` y gastar crédito.
+
+**Fuera (decidido):** RL, bandits y programación dinámica; un dashboard aparte; la
+disposición de carpetas `/src/router/`, `/src/cache/` del prompt original.
+
+## La calidad no entra en el objetivo
+
+Este lab **no tiene etiqueta de verdad** de qué modelo debía resolver cada prompt: los
+análisis de `jev-kev-laya` lo dicen explícitamente ("el acuerdo no es exactitud"). Por eso:
+
+- La fase 1 es un **estudio de coste**. La calidad entra como **restricción asumida**
+  (un turno exige un nivel mínimo de capacidad y solo se consideran modelos que lo cumplen).
+- La dificultad del turno es un **supuesto declarado** del workload, no una medida. Los
+  motores de decisión del lab (Jev, Kev) servirían como *proxy de dificultad* en una fase
+  posterior, nunca como *medida de calidad*.
+- La pregunta "¿compensa perder calidad?" **no se responde** con estos datos, y el informe
+  lo dice.
 
 ## El modelo
 
-Una sesión de agente de código tiene un prefijo estable (system prompt + definiciones
-de herramientas + historial) que se reenvía en cada turno, y un delta nuevo por turno.
-
 ```
-prefijo_t   = P0 + Σ_{i<t} U_i            # el historial crece con lo ya enviado
-turno t:    lee   min(caché[m], prefijo_t)      a precio de lectura
-            escribe (prefijo_t − leído)         a precio de escritura
-            paga U_t a precio de entrada completo
-            paga O_t a precio de salida
-después:    caché[m] = prefijo_{t+1}       # por modelo: cada modelo tiene su linaje
+prefijo_t   = P0 + Σ_{i<t} U_i                  # system + tools + historial
+turno t:    lee   min(caché_dominio, prefijo_t)      a precio de lectura
+            escribe (prefijo_t − leído)              a precio de escritura
+            paga U_t a entrada completa, O_t a salida
+            + almacenamiento, si el proveedor lo cobra
+después:    caché_dominio = prefijo_{t+1}       # dominio = proveedor:modelo:hash
 ```
 
-Reglas que hacen que el modelo reproduzca el problema real:
+Reglas que reproducen el problema real:
 
-- **La caché es por modelo.** Entrar en un modelo sin caché caliente se paga a precio de
-  escritura sobre todo el prefijo, no sobre el delta.
-- **La caché caduca.** `cacheTtlTurns` de inactividad por modelo; por defecto el TTL de
-  5 minutos de Anthropic, expresado en turnos.
-- **Las escrituras no se amortizan si vuelves a cambiar.** Si el router cambia otra vez
-  antes de que el turno amortice, la escritura anterior se tira.
+- **La caché es por dominio**, no por conversación: cambiar de modelo o de endpoint estrena
+  linaje. Volver a un dominio cuya entrada sigue viva **sí** reutiliza caché — el problema no
+  es `cambio = pérdida`, es `cambio + tiempo + mutación del prefijo`.
+- **La entrada caduca por reloj**, no por turnos: `ttlSeconds` frente al tiempo transcurrido.
+  Un turno lento o una pausa del usuario matan la caché igual que un cambio de modelo.
+- **Por debajo de `cacheMinTokens` no hay caché.** Los mínimos reales van de 512 a 32.768
+  tokens según proveedor y modelo: en prompts cortos el routing por turno es gratis.
+- **La contaminación del prefijo invalida todo.** Un turno marcado como volátil (un diff, una
+  salida de tests, un timestamp antes del breakpoint) tira **todas** las entradas, también
+  las del modelo fijo.
+
+## Estrategias comparadas
+
+| # | Estrategia | Criterio | Mira la caché |
+| --- | --- | --- | --- |
+| A | `fixed` | siempre el mismo modelo | — |
+| B | `cheapest` | el más barato elegible por precio de lista | no |
+| C | `quality` | el más barato que cubre la capacidad exigida, ponderando latencia declarada | no |
+| D | `cacheAware` | coste proyectado del turno con el ledger, más el crédito por renovar una caché viva | sí |
+| E | `warmOrSwitch` | regla de dos líneas: quédate mientras tu caché esté viva, si no cambia al más barato | sí |
+
+La estrategia E existe para poner a prueba la D: si una regla simple captura casi todo el
+beneficio, la heurística ponderada no se justifica.
 
 ## Ratios y precios
 
-Todo se expresa en **múltiplos del precio base de entrada**, que es lo que documenta
-cada proveedor, en vez de inventar precios por modelo:
+En múltiplos del precio base de entrada, que es el dato que documenta cada proveedor:
 
-| Ratio | Anthropic (5 min) | Proveedor con escritura gratuita |
+| Ratio | Anthropic (5 min) | Escritura gratuita (OpenAI, Gemini) |
 | --- | --- | --- |
 | lectura de caché | 0.1× | 0.1× |
 | escritura de caché | 1.25× | 1.0× |
-| salida | por modelo | por modelo |
 
-El informe reporta principalmente medidas **adimensionales** (coste en frío / coste en
-tibio, múltiplo acumulado, turnos de amortización). La columna en dólares usa un
-`inputUsdPerMTok` declarado y editable, solo para dar escala.
+Las cifras que sostienen las conclusiones son **adimensionales** (múltiplos de coste, turnos
+de amortización, tasa de acierto). La columna en dólares usa un precio base declarado.
 
-## Escenarios
+## Huecos declarados
 
-1. **Modelo fijo** — una sola entrada de caché, se calienta y se mantiene.
-2. **Cambio cada turno** — dos modelos alternándose; ninguna caché llega a calentarse.
-3. **Cambio una vez y me quedo** — el caso al que aspira un router con afinidad.
-4. **Barrido de factor de precio** `f` (1.0, 0.8, 0.5, 0.2, 0.1) — turnos de
-   amortización frente al acantilado.
-5. **Mismo modelo, distinto endpoint** — mismo precio, otra caché: pérdida pura, sin
-   ahorro que la compense.
-
-## Entregables
-
-- `cache-cost.ts` — el modelo, puro y sin red.
-- `run-simulation.ts` — escribe `results/simulation.jsonl` (versionado: es la fuente del
-  informe, y permite recalcular cada número).
-- `report.ts` — tablas y gráficos SVG a mano (sin dependencias), una página del sitio.
-- Entrada en `scripts/pocs.ts` y en el hub.
+- **Almacenamiento de Gemini** (`$/Mtok/hora` en caché explícita): no se modela. Sus números
+  son de otro modo de caché y no se han verificado contra una cuenta real.
+- **TTL largo de Anthropic** (1 hora, escritura a 2×): no se modela; el modelo tiene un solo
+  multiplicador de escritura.
+- **Tasa de acierto real del proveedor**: el modelo la *impone*; nadie puede observarla antes
+  de la petición. El router solo puede llevar su propio registro.
+- **Coste de las llamadas al clasificador:** fuera del modelo.
 
 ## Éxito
 
 - Cada cifra del informe se recalcula desde el JSONL versionado.
-- `npm test` cubre la aritmética: turno tibio vs frío, caducidad, amortización.
-- El build del sitio no necesita credenciales ni `data/questions.jsonl`.
+- `npm test` cubre la aritmética, las políticas, el TTL, el mínimo cacheable y la contaminación.
+- El build del sitio no necesita credenciales.
