@@ -89,13 +89,13 @@ export const POCS: readonly PocSite[] = [
   {
     slug: "cache-affinity",
     title: "Afinidad de caché",
-    question: "¿Cuánto cuesta cambiar de modelo a mitad de sesión, y a partir de qué diferencia de precio amortiza?",
+    question: "¿Cuándo es más barato mantener un modelo por su caché que cambiar a otro más barato por token?",
     date: "2026-09-28",
-    summary: "Simulación determinista del coste de caché por turno: acantilado de reescritura, TTL y turnos de amortización.",
+    summary: "Seis routers comparados sobre los mismos workloads: la caché gana dentro de una banda de precios, y el TTL decide más que el cambio de modelo.",
     pages: [
       {
         file: "report.html",
-        title: "Coste del router en caliente",
+        title: "Seis routers frente al estado de caché",
         cacheAffinity: { artifact: `${CACHE_AFFINITY}/results/simulation.jsonl` },
       },
     ],

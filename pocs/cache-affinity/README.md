@@ -94,6 +94,9 @@ es claramente más barato, y antes si el proveedor no cobra la escritura:
 | un quinto | 2 turnos | 2 |
 | un décimo | 0 (el turno frío ya gana) | 0 |
 
+El análisis fechado, con las condiciones y lo que se midió mal en la primera versión, está en
+[analysis/analysis-2026-09-28-strategies.md](./analysis/analysis-2026-09-28-strategies.md).
+
 ## Las 12 preguntas del estudio
 
 | # | Pregunta | Respuesta medida |
@@ -133,6 +136,7 @@ cifra se puede recalcular.
 | `scenarios.ts` | Comparación de estrategias y los cinco barridos. |
 | `charts.ts` | Primitivas SVG: barras, líneas y timeline. |
 | `report.ts` | El informe. |
+| `analysis/` | El análisis fechado: condiciones, cruces y lo que se midió mal. |
 | `plans/` | El diseño acordado antes de implementar. |
 
 ## Qué no mide
