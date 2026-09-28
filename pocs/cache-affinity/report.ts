@@ -16,20 +16,25 @@ const policyColor = (policy: string) => ({
 }[policy] ?? MUTED);
 
 /**
- * Una tarjeta de titular no es un número suelto: lleva la cifra, qué significa y
- * qué **no** se puede concluir de ella. El segundo punto es el que evita que una
- * cifra de coste se lea como una medida de calidad.
+ * Una tarjeta de titular no es una cifra suelta: lleva la afirmación, el mecanismo
+ * que la produce y el límite de lo que se puede concluir de ella.
  */
 export interface Finding {
   label: string;
   value: string;
-  means: string;
+  /** La conclusión, en una frase. */
+  claim: string;
+  /** Por qué pasa: el mecanismo, para poder juzgar si aplicaría a otro sistema. */
+  why: string;
+  /** Qué no se puede concluir, y qué lo cambiaría. */
   caveat: string;
 }
 
 function card(finding: Finding): string {
   return `<article><small>${escapeHtml(finding.label)}</small><strong>${escapeHtml(finding.value)}</strong>` +
-    `<p class="means">${escapeHtml(finding.means)}</p><p class="caveat">${escapeHtml(finding.caveat)}</p></article>`;
+    `<p class="claim">${escapeHtml(finding.claim)}</p>` +
+    `<p class="why"><b>Por qué</b> ${escapeHtml(finding.why)}</p>` +
+    `<p class="caveat"><b>Límite</b> ${escapeHtml(finding.caveat)}</p></article>`;
 }
 
 function section(title: string, hint: string, body: string): string {
@@ -198,35 +203,44 @@ function methodology(artifact: SimulationArtifact): string {
 }
 
 /**
- * Las tarjetas de titular. Cada una lleva la cifra, qué significa y qué no se
- * puede concluir: una cifra de coste no dice nada sobre la calidad de la respuesta,
- * y el informe lo repite donde se lee.
+ * Las tarjetas de titular. No son cifras sueltas: cada una lleva la afirmación, el
+ * mecanismo que la produce y el límite de lo que se puede concluir. El mecanismo es
+ * lo que permite juzgar si el número aplicaría a otro sistema, y el límite es lo
+ * que evita leer una cifra de coste como una medida de calidad.
  */
 export function findings(artifact: SimulationArtifact): Finding[] {
+  const warmPaces = artifact.paces.filter((row) => row.cacheHitRatio > 0).sort((left, right) => right.secondsPerTurn - left.secondsPerTurn);
   const cliffRow = artifact.paces.filter((row) => row.cacheHitRatio === 0).sort((left, right) => left.secondsPerTurn - right.secondsPerTurn)[0];
-  const lastWarm = artifact.paces.filter((row) => row.cacheHitRatio > 0).sort((left, right) => right.secondsPerTurn - left.secondsPerTurn)[0];
+  const lastWarm = warmPaces[0];
+  const ttlMinutes = Math.round((artifact.assumptions.anthropic.cacheTtlSeconds / 60) * 10) / 10;
+
   // El router de balanceo cambia de modelo a proposito, asi que no cuenta para
   // detectar el workload donde la dificultad es uniforme.
   const uniform = artifact.strategies.filter((comparison) => comparison.runs.filter((run) => run.policy !== "loadBalanced").every((run) => run.switches === 0));
-  // El caso donde el cambio paga con holgura, y el donde la penalizacion casi se
-  // come la ganancia: las dos caras de la misma estrategia.
-  const cheapestRuns = artifact.strategies
-    .flatMap((comparison) => comparison.runs.map((run) => ({ ...run, workload: comparison.workloadName })))
+
+  const cheapest = artifact.strategies
+    .flatMap((comparison) => comparison.runs.map((run) => ({ ...run, workloadName: comparison.workloadName })))
     .filter((run) => run.policy === "cheapest");
-  const biggestWin = cheapestRuns.reduce((best, run) => (run.multipleOfFixed < best.multipleOfFixed ? run : best));
-  const nearMiss = cheapestRuns.reduce((worst, run) => (run.coldPrefixPenalty > worst.coldPrefixPenalty ? run : worst));
+  const biggestWin = cheapest.reduce((best, run) => (run.multipleOfFixed < best.multipleOfFixed ? run : best));
+  const nearMiss = cheapest.reduce((worst, run) => (run.coldPrefixPenalty > worst.coldPrefixPenalty ? run : worst));
+  const wideGap = cheapest.find((run) => run.workload === "large") ?? biggestWin;
+
   const aware = artifact.priceGaps.filter((row) => row.winner === "cacheAware");
-  const awareWorst = aware.length ? Math.max(...aware.map((row) => row.cacheAware)) : 0;
-  const looseWorst = aware.length ? Math.max(...aware.map((row) => row.cheapest)) : 0;
   const awareBest = aware.length ? Math.min(...aware.map((row) => row.cacheAware)) : 0;
-  const gap = artifact.priceGaps.filter((row) => row.winner !== "cacheAware").map((row) => row.midPrice);
-  const gapThreshold = gap.length ? Math.max(...gap) : undefined;
+  const looseWorst = aware.length ? Math.max(...aware.map((row) => row.cheapest)) : 0;
+  const lost = artifact.priceGaps.filter((row) => row.winner !== "cacheAware").map((row) => row.midPrice);
+  const gapThreshold = lost.length ? Math.max(...lost) : undefined;
+
+  const unstable = artifact.strategies
+    .flatMap((comparison) => comparison.runs.filter((run) => run.policy === "loadBalanced"))
+    .reduce((worst, run) => (run.multipleOfFixed > worst.multipleOfFixed ? run : worst));
+
   // D y E coinciden cuando la cache es claramente viable o claramente imposible;
   // se separan cuando el prefijo esta justo en el minimo cacheable.
   const ruleRows = artifact.strategies.map((comparison) => {
     const heuristic = comparison.runs.find((run) => run.policy === "cacheAware")!;
     const rule = comparison.runs.find((run) => run.policy === "warmOrSwitch")!;
-    return { workload: comparison.workloadName, heuristic, rule, gap: (heuristic.total - rule.total) / rule.total };
+    return { workloadName: comparison.workloadName, gap: (heuristic.total - rule.total) / rule.total };
   });
   const ties = ruleRows.filter((row) => Math.abs(row.gap) < 1e-9);
   const worstGap = ruleRows.reduce((worst, row) => (row.gap < worst.gap ? row : worst));
@@ -235,48 +249,61 @@ export function findings(artifact: SimulationArtifact): Finding[] {
     {
       label: "Coste con la caché perdida",
       value: cliffRow ? multiple(cliffRow.multipleOfSingle) : "—",
-      means: `Alternar modelos cuesta esto cuando el turno tarda más que el TTL. La caché se pierde entera y el prefijo se paga otra vez en cada turno.`,
-      caveat: "No lo provoca el router: un modelo fijo pierde su caché igual, porque el TTL corre en reloj. Es una regla del proveedor, no de la estrategia.",
+      claim: `Alternar entre dos modelos cuesta ${cliffRow ? multiple(cliffRow.multipleOfSingle) : "—"} lo que quedarse en uno, cuando el turno tarda más que el TTL.`,
+      why: `El TTL corre en reloj, no en turnos. Si entre dos turnos pasa más tiempo que la ventana, la entrada caduca: el turno siguiente no puede leer el prefijo y lo reescribe entero a precio de escritura (${artifact.assumptions.anthropic.cacheWriteMultiplier}× la entrada) en vez de leerlo a ${artifact.assumptions.anthropic.cacheReadMultiplier}×. Escribirlo cuesta ${artifact.assumptions.anthropic.cacheWriteMultiplier / artifact.assumptions.anthropic.cacheReadMultiplier} veces más que leerlo, y con un prefijo de 40.000 tokens el prefijo domina la petición.`,
+      caveat: "No lo provoca el router: un modelo fijo con la misma pausa pierde su caché igual. Lo cambiaría un TTL más largo o turnos más rápidos, no una estrategia mejor.",
     },
     {
       label: "El ritmo que la rompe",
       value: cliffRow ? `${cliffRow.secondsPerTurn} s` : "—",
-      means: `Entre ${lastWarm?.secondsPerTurn ?? "?"} s y ${cliffRow?.secondsPerTurn ?? "?"} s por turno la tasa de acierto pasa del ${percent(lastWarm?.cacheHitRatio ?? 0)} al ${percent(cliffRow?.cacheHitRatio ?? 0)}. No hay degradación gradual.`,
-      caveat: "El umbral depende del TTL declarado, no de qué router se use. Con TTL de una hora el corte se movería mucho más allá.",
+      claim: `Con un TTL de ${ttlMinutes} minutos, entre ${lastWarm?.secondsPerTurn ?? "?"} s y ${cliffRow?.secondsPerTurn ?? "?"} s por turno el acierto pasa del ${percent(lastWarm?.cacheHitRatio ?? 0)} al ${percent(cliffRow?.cacheHitRatio ?? 0)}.`,
+      why: "No hay decaimiento gradual: una entrada está viva o no lo está. Mientras se revisite dentro de la ventana, el acierto se mantiene plano; en cuanto una visita llega tarde, ese turno paga el prefijo completo.",
+      caveat: "El umbral no es una constante del router, es el TTL declarado dividido por el patrón de revisita. Con el TTL de una hora el corte se movería a la hora, y los proveedores con caché implícita sin TTL garantizado no tienen un corte tan limpio.",
     },
     {
       label: "Sin picos de dificultad",
       value: `${uniform.length} de ${artifact.strategies.length} workloads`,
-      means: "Con dificultad uniforme ninguna estrategia cambia de modelo: el acierto se queda en el 95–97% y no hay penalización de caché. El router no toca la caché.",
-      caveat: "Y tampoco gana nada: todas empatan con quedarse en un modelo. El router solo puede aportar cuando la mezcla de tareas es heterogénea; sin picos no hay decisión que tomar.",
+      claim: "Con dificultad uniforme ninguna estrategia cambia de modelo, el acierto se queda en el 95–97% y todas empatan.",
+      why: "El router solo cambia de modelo cuando cambia la capacidad que exige el turno. Si todos los turnos piden lo mismo, elige siempre el mismo modelo y su caché no se abandona nunca. No hay decisión, así que no hay ni ganancia ni daño.",
+      caveat: "Esto acota el problema: el daño de caché no es inevitable ni un impuesto fijo, es el precio de haber decidido algo. Un router solo puede aportar cuando la mezcla de tareas es heterogénea, y en ese caso el coste de caché es parte de la factura.",
     },
     {
       label: "Aun con penalización, cambiar paga",
       value: multiple(biggestWin.multipleOfFixed),
-      means: `El router que siempre elige el más barato cambia de modelo en cada pico de dificultad y paga reescrituras de caché, pero aun así sale más barato: en ${biggestWin.workload.toLowerCase()} paga ${usd(biggestWin.coldPrefixPenalty)} y acaba en ${multiple(biggestWin.multipleOfFixed)}. La penalización no siempre es inocua: en ${nearMiss.workload.toLowerCase()} paga ${usd(nearMiss.coldPrefixPenalty)} y solo baja a ${multiple(nearMiss.multipleOfFixed)}.`,
-      caveat: "Ese ahorro está medido solo en dinero. Esta POC no tiene etiqueta de verdad de qué modelo debía resolver cada prompt, así que no está ajustado por calidad: más barato no es mejor, y el informe no puede decir que sea una mejor respuesta.",
+      claim: `El router que siempre elige el más barato paga reescrituras de caché y aun así sale más barato: en ${biggestWin.workloadName.toLowerCase()} llega a ${multiple(biggestWin.multipleOfFixed)}.`,
+      why: `El cambio se financia con el ahorro por token del resto de turnos. Cuando el modelo elegido es mucho más barato, el ahorro supera la reescritura: en ${wideGap.workloadName.toLowerCase()} cambia de modelo ${wideGap.switches} veces, paga ${usd(wideGap.coldPrefixPenalty)} y acaba en ${multiple(wideGap.multipleOfFixed)}. Cuando la brecha de precio es estrecha la penalización se come la ganancia: en ${nearMiss.workloadName.toLowerCase()} paga ${usd(nearMiss.coldPrefixPenalty)} y solo baja a ${multiple(nearMiss.multipleOfFixed)}.`,
+      caveat: "Todo esto está medido en dinero y nada más. Esta POC no tiene etiqueta de verdad de qué modelo debía resolver cada prompt, así que el ahorro no está ajustado por calidad: más barato no es mejor, y cambiar de modelo también cambia la respuesta.",
+    },
+    {
+      label: "El router inestable es el peor caso",
+      value: multiple(unstable.multipleOfFixed),
+      claim: "Un router que reparte carga entre candidatos equivalentes sin mirar la caché llega a costar esto, sin ganar nada por token.",
+      why: "Su elección no depende de la dificultad ni del precio, así que el modelo varía sin motivo y cada visita encuentra un linaje frío. No hay ahorro que compense la reescritura porque los candidatos cuestan lo mismo: el sobrecoste es puro desperdicio.",
+      caveat: "Es el único perdedor claro del estudio, y también el router más común en producción, porque el reparto de carga se decide por salud o por tasa de uso. Un router determinista no sufre esto aunque no sepa nada de caché.",
     },
     {
       label: "Dónde el cache-aware sí gana",
       value: aware.length ? `${aware.length} de ${artifact.priceGaps.length}` : "0",
-      means: `Con los candidatos dentro de la misma banda de precios, mantener la caché sale mejor: ${multiple(awareBest)} frente a ${multiple(looseWorst)} del router que cambia por turno.`,
-      caveat: `Gana por margen estrecho y solo en esa banda: en cuanto el modelo barato baja de ${gapThreshold === undefined ? "—" : `${gapThreshold.toFixed(2)}×`}, el ahorro por token se impone y deja de compensar.`,
+      claim: `Con los candidatos dentro de la misma banda de precios, conservar la caché sale mejor: ${multiple(awareBest)} frente a ${multiple(looseWorst)} del router que cambia por turno.`,
+      why: "Cuando la diferencia de precio entre candidatos es pequeña, el ahorro por token no cubre la reescritura, así que lo que decide el coste es la caché. Un router que la conserva gana por el simple hecho de no tirar trabajo ya pagado.",
+      caveat: `Gana por margen estrecho y solo en esa banda: en cuanto el modelo barato baja de ${gapThreshold === undefined ? "—" : `${gapThreshold.toFixed(2)}×`}, el ahorro por token se impone y deja de compensar. La caché no es un objetivo en sí, es un término de la factura que se hace pequeño cuando la brecha se agranda.`,
     },
     {
       label: "La regla simple casi siempre basta",
       value: `${ties.length} de ${ruleRows.length} workloads`,
-      means: `«Quédate mientras tu caché esté viva, si no cambia al más barato» da exactamente el mismo coste que la heurística de horizonte en ${ties.length} de ${ruleRows.length} workloads, con los mismos cambios de modelo y el mismo acierto.`,
-      caveat: `Se separan justo cuando el prefijo está en el mínimo cacheable: en ${worstGap.workload.toLowerCase()} la regla se vuelve pegajosa en cuanto la caché pasa a ser viable y pierde un ${(Math.abs(worstGap.gap) * 100).toFixed(1)}% frente a la heurística. Ahí sí conviene mirar el coste de cada turno.`,
+      claim: `«Quédate mientras tu caché esté viva, si no cambia al más barato» cuesta exactamente lo mismo que la heurística de horizonte en ${ties.length} de ${ruleRows.length} workloads.`,
+      why: "En la mayoría de regímenes la decisión óptima coincide con una condición binaria: si mi caché está viva, el turno ya es barato y moverme solo añade una reescritura; si no lo está, no hay nada que conservar y gana el más barato. La heurística de horizonte llega a la misma conclusión por un camino más caro.",
+      caveat: `Se separan justo cuando el prefijo está en el mínimo cacheable: en ${worstGap.workloadName.toLowerCase()} la regla se vuelve pegajosa en cuanto la caché pasa a ser viable y pierde un ${(Math.abs(worstGap.gap) * 100).toFixed(1)}% frente a la heurística. Ahí sí conviene valorar cada turno en vez de aplicar la condición.`,
     },
     {
       label: "Reproducir",
       value: artifact.generatedBy,
-      means: "Regenera el artefacto del que sale este informe. Cada cifra se puede recalcular desde el JSONL versionado.",
-      caveat: "Sin credenciales y sin red: el modelo es determinista. No se llama a ningún proveedor para producir estas cifras.",
+      claim: "Cada cifra de esta página se recalcula desde el artefacto versionado en el repositorio.",
+      why: "El modelo es determinista y puro: recibe el prefijo, el ritmo y el patrón de turnos, y devuelve el coste de cada turno. El informe no recalcula nada, solo renderiza el JSONL, así que publicar y verificar son el mismo comando.",
+      caveat: "No llama a ningún proveedor, así que no mide la tasa de acierto real, ni la latencia, ni el tiempo hasta el primer token. Impone los ratios documentados y el TTL como supuestos declarados: sirve para comparar estrategias entre sí, no para predecir una factura.",
     },
   ];
 }
-
 export function renderCacheAffinityReport(artifact: SimulationArtifact): string {
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
     `<title>Afinidad de caché en el router de modelos · Informe</title><style>` +
@@ -285,9 +312,12 @@ export function renderCacheAffinityReport(artifact: SimulationArtifact): string 
     `main{max-width:1120px;margin:auto;padding:2rem 1.25rem 4rem}h1{font-size:clamp(1.8rem,4vw,2.6rem);letter-spacing:-.03em;margin:0 0 .5rem}` +
     `h2{font-size:1.15rem;margin:0 0 .75rem}h3{font-size:1rem;margin:1rem 0 .5rem}header{padding:.5rem 0 1rem}.hint,small,span{color:var(--muted)}` +
     `section,.grid article{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:1.25rem;margin:1rem 0;box-shadow:0 3px 12px #22335508}` +
-    `.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:.8rem;margin:1rem 0}.grid article{margin:0;padding:1rem}` +
+    `.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:.8rem;margin:1rem 0}.grid article{margin:0;padding:1rem}` +
     `.grid small,.grid span{display:block;font-size:.78rem}.grid strong{font-size:1.6rem;letter-spacing:-.03em}` +
-    `.grid .means{margin:.5rem 0 0;font-size:.8rem}.grid .caveat{margin:.45rem 0 0;padding-top:.4rem;border-top:1px solid var(--line);font-size:.75rem;color:var(--muted)}` +
+    `.grid .claim{margin:.5rem 0 0;font-size:.85rem;font-weight:600}` +
+    `.grid .why,.grid .caveat{margin:.5rem 0 0;font-size:.78rem;line-height:1.45;overflow-wrap:anywhere}` +
+    `.grid .why b,.grid .caveat b{color:var(--ink);font-weight:600}` +
+    `.grid .why{color:var(--muted)}.grid .caveat{margin-top:.55rem;padding-top:.45rem;border-top:1px solid var(--line);color:var(--muted)}` +
     `table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}` +
     `th,td{text-align:left;padding:.6rem .5rem;border-bottom:1px solid #e9edf4;font-size:.92rem}thead th{color:var(--muted);font-size:.8rem}` +
     `tbody tr:last-child>*{border-bottom:0}svg{display:block;width:100%;height:auto;overflow:visible}svg text{fill:var(--ink);font-family:inherit}` +
@@ -298,7 +328,7 @@ export function renderCacheAffinityReport(artifact: SimulationArtifact): string 
     `<header><h1>Afinidad de caché en el router de modelos</h1>` +
     `<p>La caché de prompt está indexada <strong>por modelo y por endpoint</strong>, no por conversación. Un router que cambia de modelo pierde el prefijo que el turno anterior acabó de pagar. ` +
     `Este informe compara cinco estrategias y busca <strong>las condiciones</strong> en las que mantener la caché compensa.</p></header>` +
-    `<p class="hint" style="margin:0 0 .5rem">Cómo leer las tarjetas: cada una lleva la cifra, <strong>qué significa</strong> y <strong>qué no se puede concluir</strong> de ella.</p>` +
+    `<p class="hint" style="margin:0 0 .5rem">Cómo leer las tarjetas: cada una lleva la cifra, <strong>la afirmación</strong> que sostiene, <strong>el mecanismo</strong> que la produce y <strong>el límite</strong> de lo que se puede concluir de ella.</p>` +
     `<div class="grid">${findings(artifact).map(card).join("")}</div>` +
     timelineSection(artifact) +
     priceGapSection(artifact) +

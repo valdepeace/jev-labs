@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { barChart, escapeHtml, lineChart } from "./charts.js";
-import { renderCacheAffinityReport } from "./report.js";
+import { findings, renderCacheAffinityReport } from "./report.js";
 import { buildSimulation, type SimulationArtifact } from "./scenarios.js";
 
 const artifact = JSON.parse(await readFile("pocs/cache-affinity/results/simulation.jsonl", "utf8")) as SimulationArtifact;
@@ -29,6 +29,21 @@ test("every workload, sequence and strategy appears in the report", () => {
     for (const run of comparison.runs) assert.ok(html.includes(escapeHtml(run.policyName)), `${run.policyName} missing`);
   }
   for (const sequence of artifact.sequences) assert.ok(html.includes(sequence.pattern), `${sequence.pattern} missing`);
+});
+
+test("every headline card states the claim, the mechanism and the limit", () => {
+  const html = renderCacheAffinityReport(artifact);
+  const cards = [...html.matchAll(/<article><small>([^<]*)<\/small><strong>([^<]*)<\/strong><p class="claim">([^<]*)<\/p><p class="why"><b>Por qué<\/b> ([^<]*)<\/p><p class="caveat"><b>Límite<\/b> ([^<]*)<\/p><\/article>/g)];
+  assert.equal(cards.length, findings(artifact).length, "every finding must render as a complete card");
+  for (const [, label, value, claim, why, caveat] of cards) {
+    assert.ok(claim.length > 40, `${label}: el titular no puede ser una etiqueta suelta`);
+    assert.ok(why.length > 80, `${label}: falta el mecanismo`);
+    assert.ok(caveat.length > 60, `${label}: falta el limite`);
+    assert.ok(!/quality|calidad/i.test(why), `${label}: el mecanismo no debe hablar de calidad`);
+  }
+  // El aviso de calidad tiene que estar donde se lee el resultado en dinero.
+  const money = cards.find(([, label]) => /penalización/.test(label));
+  assert.match(money[5], /no está ajustado por calidad/);
 });
 
 test("the report draws a timeline per representative session, with cache state per turn", () => {
